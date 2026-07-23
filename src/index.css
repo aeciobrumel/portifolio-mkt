@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: 'Anton';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/anton.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Miss Fajardose';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/miss-fajardose.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('/fonts/manrope.ttf') format('truetype');
+}
+
+body { margin: 0; background: oklch(0.97 0.008 90); font-family: 'Manrope', sans-serif; }
+a { color: oklch(0.52 0.24 292); text-decoration: none; }
+a:hover { color: oklch(0.4 0.24 292); }
+::selection { background: oklch(0.52 0.24 292); color: #fff; }
+
+@keyframes marqueeScroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@keyframes playPulse { 0%, 100% { transform: translate(-50%,-50%) scale(1); } 50% { transform: translate(-50%,-50%) scale(1.1); } }
