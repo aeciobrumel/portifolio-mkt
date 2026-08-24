@@ -1,3 +1,8 @@
+import video1 from './img/VIDEO1.mp4';
+import video2 from './img/VIDEO2.mp4';
+import video3 from './img/VIDEO3.mp4';
+import video4 from './img/VIDEO4.mp4';
+
 export interface Servico {
   num: string;
   titulo: string;
@@ -33,10 +38,10 @@ export interface VideoInfo {
 }
 
 export const VIDEOS_INFO: VideoInfo[] = [
-  { titulo: 'Lançamento de Produto', tipo: 'Reels' },
-  { titulo: 'Bastidores da Marca', tipo: 'TikTok' },
-  { titulo: 'Sobre a Empresa', tipo: 'Institucional' },
-  { titulo: 'Dicas Rápidas', tipo: 'Educativo' },
+  { titulo: 'Bastidores Inauguração Programa de TV', tipo: 'Shirlei Coden', src: video1 },
+  { titulo: 'Apresentação de Serviço', tipo: 'Terapeuta Integrativa', src: video2 },
+  { titulo: 'Apresentação de Produto Digital', tipo: 'Aplicativo', src: video3 },
+  { titulo: 'Formação Acadêmica', tipo: 'Institucional', src: video4 },
 ];
 
 export const TAGS: string[] = ['Instagram', 'Reels & TikTok', 'Copywriting', 'Tráfego Pago', 'Branding'];
