@@ -2,6 +2,13 @@ import video1 from './img/VIDEO1.mp4';
 import video2 from './img/VIDEO2.mp4';
 import video3 from './img/VIDEO3.mp4';
 import video4 from './img/VIDEO4.mp4';
+import produto1 from './img/PRODUTO1.png';
+import produto2 from './img/PRODUTO2.png';
+import produto3 from './img/PRODUTO3.png';
+import produto4 from './img/PRODUTO4.png';
+import produto5 from './img/PRODUTO5.png';
+import produto6 from './img/PRODUTO6.png';
+import produto7 from './img/PRODUTO7.png';
 
 export interface Servico {
   num: string;
@@ -19,13 +26,26 @@ export const SERVICOS: Servico[] = [
 export interface Projeto {
   titulo: string;
   desc: string;
-  embedUrl?: string;
+  /** Imagens do carrossel estilo Instagram (multi-post). */
+  imagens: string[];
 }
 
 export const PROJETOS: Projeto[] = [
-  { titulo: 'Lançamento de Produto Digital', desc: 'Estratégia de conteúdo e tráfego para o lançamento de um infoproduto, do teaser ao carrinho aberto.' },
-  { titulo: 'Campanha para App de Saúde Mental', desc: 'Planejamento de conteúdo e mídia paga para aquisição de usuários de um app de bem-estar.', embedUrl: 'https://www.youtube.com/embed/iBRxq5Pqt_k' },
-  { titulo: 'Gerenciamento de Marketing e Instagram', desc: 'Gestão completa de redes sociais e estratégia de marketing para clientes da Estácio.' },
+  {
+    titulo: 'Lançamento de Produto Digital',
+    desc: 'Estratégia de conteúdo e tráfego para o lançamento de um infoproduto, do teaser ao carrinho aberto.',
+    imagens: [produto1, produto2, produto3, produto4, produto5, produto6, produto7],
+  },
+  {
+    titulo: 'Campanha para App de Saúde Mental',
+    desc: 'Planejamento de conteúdo e mídia paga para aquisição de usuários de um app de bem-estar.',
+    imagens: ['', '', ''],
+  },
+  {
+    titulo: 'Gerenciamento de Marketing e Instagram',
+    desc: 'Gestão completa de redes sociais e estratégia de marketing para clientes da Estácio.',
+    imagens: ['', '', ''],
+  },
 ];
 
 export interface VideoInfo {

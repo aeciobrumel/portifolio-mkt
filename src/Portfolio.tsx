@@ -24,6 +24,275 @@ function useMagnetic(ref: React.RefObject<HTMLElement>, strength: number) {
   return { onMove, onLeave };
 }
 
+/**
+ * Coverflow scaling/curve effect plus seamless infinite looping.
+ * Expects `cloneCount` real items cloned at each end of the track
+ * (rendered by the caller) so wraparound can jump the scroll position
+ * without any visible discontinuity.
+ */
+function useCoverflow(ref: React.RefObject<HTMLDivElement>, realCount: number, cloneCount: number) {
+  const rafId = useRef<number | null>(null);
+  const settleRafId = useRef<number | null>(null);
+  const correcting = useRef(false);
+
+  // Cards live inside a Reveal wrapper, so offsetLeft (relative to that
+  // wrapper) is always 0, and getBoundingClientRect() is skewed by the
+  // scale/rotate transform this hook applies — so positions are computed
+  // analytically from each card's untransformed offsetWidth plus the flex
+  // gap, which stays accurate regardless of DOM nesting or transforms.
+  const cardPositions = useCallback((el: HTMLDivElement) => {
+    const cs = getComputedStyle(el);
+    const gap = parseFloat(cs.columnGap || '0') || 0;
+    let left = parseFloat(cs.paddingLeft || '0') || 0;
+    return Array.from(el.querySelectorAll<HTMLElement>('.coverflow-card')).map((card, i) => {
+      if (i > 0) left += gap;
+      const width = card.offsetWidth;
+      const entry = { card, left, width };
+      left += width;
+      return entry;
+    });
+  }, []);
+
+  const update = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    const center = el.scrollLeft + el.clientWidth / 2;
+    cardPositions(el).forEach(({ card, left, width }) => {
+      const cardCenter = left + width / 2;
+      const dist = (cardCenter - center) / el.clientWidth;
+      const clamped = Math.max(-1.5, Math.min(1.5, dist));
+      const scale = 1.12 - Math.min(Math.abs(clamped), 1) * 0.65;
+      const rotateY = clamped * -18;
+      const translateY = Math.min(Math.abs(clamped), 1) * 14;
+      const opacity = 1 - Math.min(Math.abs(clamped), 1) * 0.45;
+      card.style.transform = `perspective(1200px) rotateY(${rotateY}deg) translateY(${translateY}px) scale(${scale})`;
+      card.style.opacity = String(opacity);
+      card.style.zIndex = String(Math.round((1 - Math.min(Math.abs(clamped), 1)) * 100));
+    });
+  }, [ref, cardPositions]);
+
+  const teleport = useCallback((el: HTMLDivElement, deltaScroll: number) => {
+    correcting.current = true;
+    const cards = el.querySelectorAll<HTMLElement>('.coverflow-card');
+    // Suppress the cards' transform/opacity transition for this jump only —
+    // otherwise the sudden scrollLeft change animates through every
+    // intermediate scale/rotation, reading as a visible "yank".
+    cards.forEach((c) => { c.style.transition = 'none'; });
+    el.scrollLeft += deltaScroll;
+    update();
+    // Force layout so the jump + restyle above are committed before the
+    // transition is restored, otherwise the browser can still tween it.
+    void el.offsetHeight;
+    requestAnimationFrame(() => {
+      cards.forEach((c) => { c.style.transition = ''; });
+      correcting.current = false;
+    });
+  }, [update]);
+
+  // Native `scroll-snap-type` jumps instantly when it engages, so it's kept
+  // off at all times; this does that snap itself with a smooth scrollTo
+  // once motion has actually stopped (see watchSettle below).
+  const snapToNearest = useCallback(() => {
+    const el = ref.current;
+    if (!el || correcting.current) return;
+    const positions = cardPositions(el);
+    if (!positions.length) return;
+    const center = el.scrollLeft + el.clientWidth / 2;
+    let nearest = positions[0];
+    let bestDist = Infinity;
+    for (const p of positions) {
+      const d = Math.abs(p.left + p.width / 2 - center);
+      if (d < bestDist) { bestDist = d; nearest = p; }
+    }
+    const target = nearest.left + nearest.width / 2 - el.clientWidth / 2;
+    if (Math.abs(target - el.scrollLeft) > 1) {
+      el.scrollTo({ left: target, behavior: 'smooth' });
+    }
+  }, [ref, cardPositions]);
+
+  const loopCheck = useCallback(() => {
+    const el = ref.current;
+    if (!el || correcting.current) return;
+    const positions = cardPositions(el);
+    if (positions.length < 2) return;
+    const s = positions[1].left - positions[0].left;
+    if (!s) return;
+    const centerIndex = Math.round((el.scrollLeft - positions[0].left) / s);
+    if (centerIndex < cloneCount) {
+      teleport(el, realCount * s);
+    } else if (centerIndex >= cloneCount + realCount) {
+      teleport(el, -realCount * s);
+    }
+  }, [ref, realCount, cloneCount, cardPositions, teleport]);
+
+  // Watches scrollLeft frame-to-frame and fires once it stops changing —
+  // far snappier than a fixed debounce, so the correction lands right as
+  // the eye stops tracking motion instead of lagging behind and reading
+  // as a visible jump.
+  const watchSettle = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    const last = el.scrollLeft;
+    if (settleRafId.current !== null) cancelAnimationFrame(settleRafId.current);
+    settleRafId.current = requestAnimationFrame(() => {
+      settleRafId.current = null;
+      if (!ref.current) return;
+      if (ref.current.scrollLeft === last) {
+        loopCheck();
+        snapToNearest();
+      } else {
+        watchSettle();
+      }
+    });
+  }, [ref, loopCheck, snapToNearest]);
+
+  const onScroll = useCallback(() => {
+    if (rafId.current === null) {
+      rafId.current = requestAnimationFrame(() => {
+        rafId.current = null;
+        update();
+      });
+    }
+    watchSettle();
+  }, [update, watchSettle]);
+
+  const layout = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    const positions = cardPositions(el);
+    const firstCard = positions[0];
+    if (firstCard) {
+      const side = Math.max(0, (el.clientWidth - firstCard.width) / 2);
+      el.style.paddingLeft = `${side}px`;
+      el.style.paddingRight = `${side}px`;
+    }
+    const refreshed = cardPositions(el);
+    const target = refreshed[cloneCount];
+    if (target) {
+      correcting.current = true;
+      el.scrollLeft = target.left + target.width / 2 - el.clientWidth / 2;
+      correcting.current = false;
+    }
+    update();
+  }, [ref, cloneCount, cardPositions, update]);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    layout();
+    el.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', layout, { passive: true });
+    window.addEventListener('load', layout);
+    // Cards can change size after mount — fonts finishing load, images
+    // decoding, viewport width landing at a size where `min(62vw,320px)`
+    // resolves differently — any of which would otherwise leave the
+    // padding/centering computed against stale card widths. Observing the
+    // track itself isn't enough (its own size is fixed by the parent
+    // layout), so the first card is observed directly.
+    const ro = new ResizeObserver(() => layout());
+    const firstCard = el.querySelector('.coverflow-card');
+    if (firstCard) ro.observe(firstCard);
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', layout);
+      window.removeEventListener('load', layout);
+      ro.disconnect();
+      if (rafId.current !== null) cancelAnimationFrame(rafId.current);
+      if (settleRafId.current !== null) cancelAnimationFrame(settleRafId.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onScroll, layout, realCount, cloneCount]);
+
+  // Lets callers (e.g. clicking a side card) smooth-scroll a specific card
+  // to center without fighting snapToNearest — which otherwise reacts to
+  // the in-flight scroll and can retarget mid-animation, since "nearest to
+  // the (still moving) center" can briefly be a different real card than
+  // the intended target.
+  const scrollToCard = useCallback((card: HTMLElement) => {
+    const el = ref.current;
+    if (!el) return;
+    const positions = cardPositions(el);
+    const entry = positions.find((p) => p.card === card);
+    if (!entry) return;
+    const target = entry.left + entry.width / 2 - el.clientWidth / 2;
+    if (Math.abs(target - el.scrollLeft) < 1) return; // already centered, nothing to do
+    correcting.current = true;
+    el.scrollTo({ left: target, behavior: 'smooth' });
+    const release = () => {
+      correcting.current = false;
+      el.removeEventListener('scrollend', release);
+    };
+    // scrollend is the precise signal, but it's not universally supported
+    // (and can silently never fire in some engines) — a timeout backstop
+    // guarantees `correcting` is never stuck true if it doesn't arrive.
+    if ('onscrollend' in el) {
+      el.addEventListener('scrollend', release, { once: true });
+    }
+    setTimeout(release, 600);
+  }, [ref, cardPositions]);
+
+  return { scrollToCard };
+}
+
+/** Drag-to-scroll: lets the mouse "grab and pull" the track like a touch swipe. */
+function useDragScroll(ref: React.RefObject<HTMLDivElement>) {
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let dragging = false;
+    let moved = false;
+    let startX = 0;
+    let startScroll = 0;
+
+    let pointerId: number | null = null;
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.pointerType !== 'mouse') return;
+      dragging = true;
+      moved = false;
+      startX = e.clientX;
+      startScroll = el.scrollLeft;
+      pointerId = e.pointerId;
+      el.style.cursor = 'grabbing';
+    };
+    const onPointerMove = (e: PointerEvent) => {
+      if (!dragging) return;
+      const dx = e.clientX - startX;
+      if (!moved && Math.abs(dx) > 8) {
+        moved = true;
+        // Only capture once an actual drag starts, so a plain click (e.g.
+        // on the play button) never has its pointer events redirected.
+        if (pointerId !== null) el.setPointerCapture(pointerId);
+      }
+      if (moved) el.scrollLeft = startScroll - dx;
+    };
+    const endDrag = (e: PointerEvent) => {
+      if (!dragging) return;
+      dragging = false;
+      el.style.cursor = '';
+      if (moved && pointerId !== null && el.hasPointerCapture(pointerId)) el.releasePointerCapture(pointerId);
+      pointerId = null;
+    };
+    const onClickCapture = (e: MouseEvent) => {
+      if (moved) { e.preventDefault(); e.stopPropagation(); moved = false; }
+    };
+
+    el.addEventListener('pointerdown', onPointerDown);
+    el.addEventListener('pointermove', onPointerMove);
+    el.addEventListener('pointerup', endDrag);
+    el.addEventListener('pointercancel', endDrag);
+    el.addEventListener('click', onClickCapture, true);
+    el.style.cursor = 'grab';
+    return () => {
+      el.removeEventListener('pointerdown', onPointerDown);
+      el.removeEventListener('pointermove', onPointerMove);
+      el.removeEventListener('pointerup', endDrag);
+      el.removeEventListener('pointercancel', endDrag);
+      el.removeEventListener('click', onClickCapture, true);
+    };
+  }, [ref]);
+}
+
 function useTilt(ref: React.RefObject<HTMLElement>, strength: number) {
   const onMove = useCallback((e: React.MouseEvent) => {
     const el = ref.current;
@@ -74,6 +343,8 @@ interface SectionEntry {
   done: boolean;
 }
 
+const CAROUSEL_CLONE_COUNT = Math.min(2, VIDEOS_INFO.length);
+
 export default function Portfolio() {
   const isTouch = useIsTouch();
   const [heroIn, setHeroIn] = useState(false);
@@ -85,6 +356,12 @@ export default function Portfolio() {
   VIDEOS_INFO.forEach((v, i) => {
     if (v.src) { videoSrcs[i] = v.src; mediaKinds[i] = v.kind ?? 'video'; }
   });
+  const n = VIDEOS_INFO.length;
+  const loopedVideos = [
+    ...VIDEOS_INFO.slice(n - CAROUSEL_CLONE_COUNT).map((v, i) => ({ ...v, realIndex: n - CAROUSEL_CLONE_COUNT + i })),
+    ...VIDEOS_INFO.map((v, i) => ({ ...v, realIndex: i })),
+    ...VIDEOS_INFO.slice(0, CAROUSEL_CLONE_COUNT).map((v, i) => ({ ...v, realIndex: i })),
+  ];
 
   const cursorDot = useRef<HTMLDivElement>(null);
   const cursorRing = useRef<HTMLDivElement>(null);
@@ -95,12 +372,24 @@ export default function Portfolio() {
   const navCta = useRef<HTMLAnchorElement>(null);
   const photo = useRef<HTMLDivElement>(null);
   const services = useRef<HTMLDivElement>(null);
-  const arrowLeft = useRef<HTMLDivElement>(null);
-  const arrowRight = useRef<HTMLDivElement>(null);
   const email = useRef<HTMLAnchorElement>(null);
   const whats = useRef<HTMLAnchorElement>(null);
   const insta = useRef<HTMLAnchorElement>(null);
   const sectionRefs = useRef<Record<string, SectionEntry>>({});
+  const activeVideo = useRef<HTMLVideoElement | null>(null);
+
+  const { scrollToCard } = useCoverflow(carousel, VIDEOS_INFO.length, CAROUSEL_CLONE_COUNT);
+
+  const centerCard = useCallback((card: HTMLElement) => {
+    scrollToCard(card);
+  }, [scrollToCard]);
+
+  const handleVideoPlay = useCallback((el: HTMLVideoElement) => {
+    if (activeVideo.current && activeVideo.current !== el) activeVideo.current.pause();
+    activeVideo.current = el;
+    const card = el.closest<HTMLElement>('.coverflow-card');
+    if (card) centerCard(card);
+  }, [centerCard]);
 
   const registerSection = useCallback((key: string, el: HTMLElement, setVisible: (v: boolean) => void) => {
     sectionRefs.current[key] = { el, setVisible, done: false };
@@ -197,17 +486,11 @@ export default function Portfolio() {
 
   const photoTilt = useTilt(photo, 6);
   const navMag = useMagnetic(navCta, 0.3);
-  const arrowLeftMag = useMagnetic(arrowLeft, 0.4);
-  const arrowRightMag = useMagnetic(arrowRight, 0.4);
   const emailMag = useMagnetic(email, 0.3);
   const whatsMag = useMagnetic(whats, 0.3);
   const instaMag = useMagnetic(insta, 0.3);
 
-  const scrollCarousel = (dir: number) => {
-    const el = carousel.current;
-    if (!el) return;
-    el.scrollBy({ left: dir * el.clientWidth * 0.85, behavior: 'smooth' });
-  };
+  useDragScroll(carousel);
 
   const onServicesMove = (e: React.MouseEvent) => {
     const el = services.current;
@@ -372,24 +655,20 @@ export default function Portfolio() {
 
       {/* CONTEÚDOS */}
       <div id="videos" className="max-w-6xl mx-auto" style={{ padding: 'clamp(56px,10vw,100px) clamp(20px,5vw,48px) clamp(48px,8vw,90px)' }}>
-        <Reveal id="videos-header" onRegister={registerSection} className="flex items-end justify-between mb-10 flex-wrap gap-5">
-          <div>
-            <div className="text-[13px] font-bold tracking-widest uppercase text-[oklch(0.52_0.24_292)]">Carrossel</div>
-            <div className="font-[Anton] leading-tight" style={{ fontSize: 'clamp(28px,7vw,44px)' }}>CONTEÚDOS EM DESTAQUE</div>
-          </div>
-          <div className="flex gap-3">
-            <div ref={arrowLeft} onMouseMove={arrowLeftMag.onMove} onMouseLeave={arrowLeftMag.onLeave} onClick={() => scrollCarousel(-1)} onMouseEnter={cursorEnter}
-              className="w-12 h-12 rounded-full border-[1.5px] border-[oklch(0.16_0_0/0.25)] flex items-center justify-center cursor-pointer text-xl transition-transform duration-200 active:scale-90 active:bg-[oklch(0.16_0_0)] active:text-white">←</div>
-            <div ref={arrowRight} onMouseMove={arrowRightMag.onMove} onMouseLeave={arrowRightMag.onLeave} onClick={() => scrollCarousel(1)} onMouseEnter={cursorEnter}
-              className="w-12 h-12 rounded-full border-[1.5px] border-[oklch(0.16_0_0/0.25)] flex items-center justify-center cursor-pointer text-xl transition-transform duration-200 active:scale-90 active:bg-[oklch(0.16_0_0)] active:text-white">→</div>
-          </div>
+        <Reveal id="videos-header" onRegister={registerSection} className="mb-10">
+          <div className="text-[13px] font-bold tracking-widest uppercase text-[oklch(0.52_0.24_292)]">Carrossel</div>
+          <div className="font-[Anton] leading-tight" style={{ fontSize: 'clamp(28px,7vw,44px)' }}>CONTEÚDOS EM DESTAQUE</div>
         </Reveal>
-        <div ref={carousel} className="flex gap-6 overflow-x-auto pb-2.5" style={{ scrollSnapType: 'x mandatory' }}>
-          {VIDEOS_INFO.map((v, i) => (
+        <div
+          ref={carousel}
+          className="flex items-center overflow-x-auto no-scrollbar"
+          style={{ perspective: '1200px', touchAction: 'pan-x', paddingTop: '64px', paddingBottom: '64px', gap: 'clamp(16px,4vw,48px)' }}
+        >
+          {loopedVideos.map((v, slot) => (
             <VideoCard
-              key={i} index={i} info={v} src={videoSrcs[i]} kind={mediaKinds[i]}
+              key={slot} slot={slot} index={v.realIndex} info={v} src={videoSrcs[v.realIndex]} kind={mediaKinds[v.realIndex]}
               cursorEnterLabel={cursorEnterLabel} cursorLeaveLabel={cursorLeaveLabel}
-              registerSection={registerSection}
+              registerSection={registerSection} onVideoPlay={handleVideoPlay} onCardClick={centerCard}
             />
           ))}
         </div>
@@ -402,18 +681,11 @@ export default function Portfolio() {
             <div className="text-[13px] font-bold tracking-widest uppercase text-[oklch(0.52_0.24_292)]">Trabalhos</div>
             <div className="font-[Anton]" style={{ fontSize: 'clamp(28px,7vw,44px)', marginBottom: 'clamp(32px,6vw,48px)' }}>PROJETOS</div>
           </Reveal>
-          <div className="grid gap-8" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(min(260px,100%),1fr))' }}>
+          <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(min(260px,100%),1fr))', gap: 'clamp(40px,8vw,32px)' }}>
             {PROJETOS.map((p, i) => (
               <Reveal key={p.titulo} id={`projeto-${i}`} delay={i * 0.1} onRegister={registerSection}>
-                <div className="w-full rounded-[10px] overflow-hidden bg-[oklch(0.9_0.005_90)]" style={{ aspectRatio: '4/3' }}>
-                  {p.embedUrl ? (
-                    <iframe src={p.embedUrl} title={p.titulo} className="w-full h-full border-0"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-sm text-[oklch(0.5_0_0)]">Imagem do projeto</div>
-                  )}
-                </div>
-                <div className="mt-4.5 font-extrabold text-lg">{p.titulo}</div>
+                <ProjectCarousel imagens={p.imagens} titulo={p.titulo} />
+                <div className="mt-6 font-extrabold text-lg">{p.titulo}</div>
                 <div className="text-sm leading-relaxed text-[oklch(0.4_0_0)] mt-1.5">{p.desc}</div>
               </Reveal>
             ))}
@@ -443,12 +715,76 @@ export default function Portfolio() {
   );
 }
 
+interface ProjectCarouselProps {
+  imagens: string[];
+  titulo: string;
+}
+
+function ProjectCarousel({ imagens, titulo }: ProjectCarouselProps) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [active, setActive] = useState(0);
+  useDragScroll(trackRef);
+
+  const onScroll = useCallback(() => {
+    const el = trackRef.current;
+    if (!el) return;
+    const idx = Math.round(el.scrollLeft / el.clientWidth);
+    setActive(Math.min(imagens.length - 1, Math.max(0, idx)));
+  }, [imagens.length]);
+
+  const goTo = (idx: number) => {
+    const el = trackRef.current;
+    if (!el) return;
+    el.scrollTo({ left: idx * el.clientWidth, behavior: 'smooth' });
+  };
+
+  return (
+    <div className="relative">
+      <div
+        ref={trackRef}
+        onScroll={onScroll}
+        className="flex overflow-x-auto rounded-[10px] bg-[oklch(0.9_0.005_90)]"
+        style={{ aspectRatio: '4/5', scrollSnapType: 'x mandatory' }}
+      >
+        {imagens.map((src, idx) => (
+          <div key={idx} className="flex-none w-full h-full flex items-center justify-center text-sm text-[oklch(0.5_0_0)]" style={{ scrollSnapAlign: 'start' }}>
+            {src ? (
+              <img src={src} alt={`${titulo} — imagem ${idx + 1}`} className="w-full h-full object-cover block" />
+            ) : (
+              `Imagem do projeto ${idx + 1}`
+            )}
+          </div>
+        ))}
+      </div>
+      {imagens.length > 1 && (
+        <div className="flex justify-center gap-2 mt-4 mb-2">
+          {imagens.map((_, idx) => (
+            <button
+              key={idx}
+              type="button"
+              aria-label={`Ir para imagem ${idx + 1}`}
+              onClick={() => goTo(idx)}
+              className="rounded-full transition-[background,transform] duration-200"
+              style={{
+                width: idx === active ? '18px' : '7px',
+                height: '7px',
+                background: idx === active ? 'oklch(0.52 0.24 292)' : 'oklch(0.16 0 0 / 0.25)',
+              }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface VideoInfo {
   titulo: string;
   tipo: string;
 }
 
 interface VideoCardProps {
+  slot: number;
   index: number;
   info: VideoInfo;
   src?: string;
@@ -456,9 +792,12 @@ interface VideoCardProps {
   cursorEnterLabel: (label: string) => () => void;
   cursorLeaveLabel: () => void;
   registerSection: (id: string, el: HTMLElement, setVisible: (v: boolean) => void) => void;
+  onVideoPlay: (el: HTMLVideoElement) => void;
+  onCardClick: (card: HTMLElement) => void;
 }
 
-function VideoCard({ index, info, src, kind, cursorEnterLabel, cursorLeaveLabel, registerSection }: VideoCardProps) {
+function VideoCard({ slot, index, info, src, kind, cursorEnterLabel, cursorLeaveLabel, registerSection, onVideoPlay, onCardClick }: VideoCardProps) {
+  const cardRef = useRef<HTMLDivElement>(null);
   const tiltRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const tilt = useTilt(tiltRef, 10);
@@ -467,14 +806,20 @@ function VideoCard({ index, info, src, kind, cursorEnterLabel, cursorLeaveLabel,
   const [isPlaying, setIsPlaying] = useState(false);
 
   const togglePlay = () => {
+    if (cardRef.current) onCardClick(cardRef.current);
     const el = videoRef.current;
     if (!el) return;
     if (el.paused) el.play(); else el.pause();
   };
 
   return (
-    <Reveal id={`video-${index}`} delay={index * 0.08} onRegister={registerSection} className="flex-none" >
-      <div style={{ width: 'min(62vw,320px)' }} className="active:scale-[0.97] transition-transform">
+    <Reveal id={`video-${slot}`} delay={index * 0.08} onRegister={registerSection} className="flex-none">
+      <div
+        ref={cardRef}
+        onClick={() => { if (cardRef.current) onCardClick(cardRef.current); }}
+        className="coverflow-card active:scale-[0.97]"
+        style={{ width: 'min(46vw,320px)', transition: 'transform 0.4s cubic-bezier(.16,1,.3,1), opacity 0.4s ease' }}
+      >
         <div
           ref={tiltRef}
           onMouseMove={tilt.onMove}
@@ -486,8 +831,8 @@ function VideoCard({ index, info, src, kind, cursorEnterLabel, cursorLeaveLabel,
           {hasVideo && (
             <>
               <video
-                ref={videoRef} src={src} controls playsInline
-                onPlay={() => setIsPlaying(true)}
+                ref={videoRef} src={src} controls playsInline preload="auto"
+                onPlay={() => { setIsPlaying(true); if (videoRef.current) onVideoPlay(videoRef.current); }}
                 onPause={() => setIsPlaying(false)}
                 className="w-full h-full object-cover block bg-black"
               />
