@@ -1131,7 +1131,15 @@ function VideoCard({ slot, index, info, src, kind, cursorEnterLabel, cursorLeave
           {hasVideo && (
             <>
               <video
-                ref={videoRef} src={src} poster={info.poster} playsInline preload="metadata"
+                ref={videoRef}
+                // O fragmento #t=0.001 obriga o navegador (inclusive iOS Safari,
+                // que senão mostra só preto) a decodificar e pintar o primeiro
+                // frame como capa, sem precisar de imagem externa. Se um poster
+                // real for definido, ele tem prioridade.
+                src={info.poster ? src : `${src}#t=0.001`}
+                poster={info.poster}
+                playsInline
+                preload="metadata"
                 controls={isPlaying}
                 onPlay={() => { setIsPlaying(true); if (videoRef.current) onVideoPlay(videoRef.current); }}
                 onPause={() => setIsPlaying(false)}
