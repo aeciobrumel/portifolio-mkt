@@ -9,6 +9,32 @@ function useIsTouch(): boolean {
   return isTouch;
 }
 
+/**
+ * Trava a experiência em retrato NO CELULAR. `screen.orientation.lock` só
+ * funciona em alguns Androids (e nem sempre), então o que realmente segura em
+ * todo aparelho — iPhone incluído — é um overlay que cobre a tela enquanto
+ * estiver em paisagem. No desktop nunca ativa.
+ */
+function useLockPortrait(active: boolean): boolean {
+  const [isLandscape, setIsLandscape] = useState(false);
+  useEffect(() => {
+    if (!active) return;
+    const mq = window.matchMedia('(orientation: landscape)');
+    const update = () => setIsLandscape(mq.matches && window.innerWidth > window.innerHeight);
+    update();
+    mq.addEventListener('change', update);
+    window.addEventListener('resize', update);
+    // Tentativa best-effort: funciona em parte dos Androids/PWA, no-op no resto.
+    const so = screen.orientation as (ScreenOrientation & { lock?: (o: string) => Promise<void> }) | undefined;
+    so?.lock?.('portrait').catch(() => {});
+    return () => {
+      mq.removeEventListener('change', update);
+      window.removeEventListener('resize', update);
+    };
+  }, [active]);
+  return active && isLandscape;
+}
+
 function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(false);
   useEffect(() => {
@@ -252,6 +278,99 @@ function useCoverflow(ref: React.RefObject<HTMLDivElement>, realCount: number, c
   return { scrollToCard };
 }
 
+/**
+ * Infinite-loop wraparound for the mobile carousel, which is a plain native
+ * scroll-snap track (no coverflow bookkeeping). The track renders `cloneCount`
+ * real cards cloned at each end; when the scroll has FULLY stopped on a clone,
+ * we jump `scrollLeft` by exactly `realCount` card-steps to the identical real
+ * card. The jump is instant and only ever happens at rest, so it never fights
+ * the OS momentum scroller — that fight was the source of the jank/white-screen.
+ */
+function useCarouselLoop(
+  ref: React.RefObject<HTMLDivElement>,
+  realCount: number,
+  cloneCount: number,
+  active: boolean,
+) {
+  const settleTimer = useRef<number | null>(null);
+  const lastLeft = useRef(-1);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !active) return;
+
+    // Each `.coverflow-card` sits inside a Reveal wrapper, so its own offsetLeft
+    // is 0 — the wrapper is the actual flex child, so measure that.
+    const wrappers = () =>
+      Array.from(el.querySelectorAll<HTMLElement>('.coverflow-card'))
+        .map((c) => c.parentElement)
+        .filter((w): w is HTMLElement => !!w);
+
+    const step = () => {
+      const w = wrappers();
+      if (w.length < 2) return w[0]?.offsetWidth ?? 0;
+      // Distance between two consecutive card slots (width + flex gap).
+      return (w[1].offsetLeft - w[0].offsetLeft) || w[0].offsetWidth;
+    };
+
+    // Start centred on the first REAL card (index === cloneCount).
+    const recentre = () => {
+      const w = wrappers();
+      const target = w[cloneCount];
+      if (target) target.scrollIntoView({ behavior: 'auto', inline: 'center', block: 'nearest' });
+    };
+
+    const wrapIfNeeded = () => {
+      const s = step();
+      const w = wrappers();
+      if (!s || !w.length) return;
+      const base = w[0].offsetLeft;
+      // Which slot is currently centred in the viewport.
+      const centre = el.scrollLeft + el.clientWidth / 2;
+      const index = Math.round((centre - base - w[0].offsetWidth / 2) / s);
+      let jump = 0;
+      if (index < cloneCount) jump = realCount * s;
+      else if (index >= cloneCount + realCount) jump = -realCount * s;
+      if (!jump) return;
+      // Instant, no smooth — the clone and its real twin are pixel-identical,
+      // and the scroll is already at rest, so this is invisible. Snap is
+      // toggled off for the write so it can't re-animate the correction.
+      const prevSnap = el.style.scrollSnapType;
+      el.style.scrollSnapType = 'none';
+      el.scrollLeft += jump;
+      void el.offsetHeight;
+      el.style.scrollSnapType = prevSnap;
+    };
+
+    const onScroll = () => {
+      if (settleTimer.current !== null) window.clearTimeout(settleTimer.current);
+      // Poll until scrollLeft holds steady for one interval — "fully stopped",
+      // momentum included. scrollend would be cleaner but isn't reliable on iOS.
+      const tick = () => {
+        if (!ref.current) return;
+        if (ref.current.scrollLeft === lastLeft.current) {
+          settleTimer.current = null;
+          wrapIfNeeded();
+        } else {
+          lastLeft.current = ref.current.scrollLeft;
+          settleTimer.current = window.setTimeout(tick, 120);
+        }
+      };
+      lastLeft.current = el.scrollLeft;
+      settleTimer.current = window.setTimeout(tick, 120);
+    };
+
+    // Cards may still be resizing at mount (fonts, `min(42vw,214px)`).
+    const raf = requestAnimationFrame(recentre);
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      cancelAnimationFrame(raf);
+      el.removeEventListener('scroll', onScroll);
+      if (settleTimer.current !== null) window.clearTimeout(settleTimer.current);
+    };
+  }, [ref, realCount, cloneCount, active]);
+}
+
 /** Drag-to-scroll: lets the mouse "grab and pull" the track like a touch swipe. */
 function useDragScroll(ref: React.RefObject<HTMLDivElement>) {
   useEffect(() => {
@@ -367,6 +486,7 @@ const CAROUSEL_CLONE_COUNT = VIDEOS_INFO.length;
 
 export default function Portfolio() {
   const isTouch = useIsTouch();
+  const forcePortrait = useLockPortrait(isTouch);
   const projetoModalHabilitado = useMediaQuery('(min-width: 378px) and (max-width: 767px)');
   const [heroIn, setHeroIn] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -381,18 +501,17 @@ export default function Portfolio() {
     if (v.src) { videoSrcs[i] = v.src; mediaKinds[i] = v.kind ?? 'video'; }
   });
   const n = VIDEOS_INFO.length;
-  // Desktop runs the coverflow effect with an infinite loop (real set cloned at
-  // each end). On touch that machinery (manual snap + teleport + per-frame
-  // remeasure) fights the OS momentum scroller and causes jank/white-screen, so
-  // mobile just renders the real cards in a native scroll-snap track.
+  // Desktop runs the coverflow effect (per-frame rescale/rotate). On touch that
+  // machinery fights the OS momentum scroller and caused jank/white-screen, so
+  // mobile uses a plain native scroll-snap track instead. Both modes render the
+  // real set cloned at each end for the infinite loop — on mobile the wraparound
+  // jump is done by useCarouselLoop only once the scroll has fully stopped.
   const coverflowEnabled = !isTouch;
-  const carouselVideos = coverflowEnabled
-    ? [
-        ...VIDEOS_INFO.slice(n - CAROUSEL_CLONE_COUNT).map((v, i) => ({ ...v, realIndex: n - CAROUSEL_CLONE_COUNT + i })),
-        ...VIDEOS_INFO.map((v, i) => ({ ...v, realIndex: i })),
-        ...VIDEOS_INFO.slice(0, CAROUSEL_CLONE_COUNT).map((v, i) => ({ ...v, realIndex: i })),
-      ]
-    : VIDEOS_INFO.map((v, i) => ({ ...v, realIndex: i }));
+  const carouselVideos = [
+    ...VIDEOS_INFO.slice(n - CAROUSEL_CLONE_COUNT).map((v, i) => ({ ...v, realIndex: n - CAROUSEL_CLONE_COUNT + i })),
+    ...VIDEOS_INFO.map((v, i) => ({ ...v, realIndex: i })),
+    ...VIDEOS_INFO.slice(0, CAROUSEL_CLONE_COUNT).map((v, i) => ({ ...v, realIndex: i })),
+  ];
 
   const cursorDot = useRef<HTMLDivElement>(null);
   const cursorRing = useRef<HTMLDivElement>(null);
@@ -410,6 +529,9 @@ export default function Portfolio() {
   const activeVideo = useRef<HTMLVideoElement | null>(null);
 
   const { scrollToCard } = useCoverflow(carousel, VIDEOS_INFO.length, CAROUSEL_CLONE_COUNT, coverflowEnabled);
+  // No mobile o coverflow fica desligado; este hook cuida do loop infinito
+  // fazendo o "pulo" de reposição só quando o scroll para por completo.
+  useCarouselLoop(carousel, VIDEOS_INFO.length, CAROUSEL_CLONE_COUNT, !coverflowEnabled);
 
   useEffect(() => {
     const lock = menuOpen || projetoAberto !== null;
@@ -565,6 +687,16 @@ export default function Portfolio() {
 
   return (
     <div className="w-full overflow-x-hidden text-[oklch(0.16_0_0)]" style={{ cursor: isTouch ? 'auto' : 'none' }}>
+      {/* Trava em retrato no celular: cobre a tela enquanto estiver deitado */}
+      {forcePortrait && (
+        <div className="fixed inset-0 z-[10002] bg-[oklch(0.16_0_0)] text-white flex flex-col items-center justify-center gap-4 px-8 text-center">
+          <div className="text-4xl" style={{ animation: 'rotateHint 2s ease-in-out infinite' }}>📱</div>
+          <div className="font-[Anton] text-lg tracking-wide">Gire o celular</div>
+          <div className="text-[13px] text-[oklch(0.75_0_0)] max-w-[260px] leading-relaxed">
+            Este portfólio foi feito para ser visto em pé. Volte o aparelho para a vertical.
+          </div>
+        </div>
+      )}
       {!isTouch && (
         <>
           <div ref={cursorDot} className="fixed top-0 left-0 w-1.5 h-1.5 -mt-[3px] -ml-[3px] rounded-full bg-[oklch(0.16_0_0)] pointer-events-none z-[9999] will-change-transform" />
