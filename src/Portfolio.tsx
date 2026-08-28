@@ -672,7 +672,10 @@ export default function Portfolio() {
       >↑</div>
 
       {/* NAV */}
-      <div className="fixed top-0 inset-x-0 z-50 bg-[oklch(0.97_0.008_90)] border-b border-[oklch(0.16_0_0/0.08)]">
+      <div
+        className="fixed top-0 inset-x-0 z-50 bg-[oklch(0.97_0.008_90)] border-b border-[oklch(0.16_0_0/0.08)]"
+        style={{ paddingTop: 'env(safe-area-inset-top)' }}
+      >
         <div className={`flex items-center justify-between gap-3 px-3 md:px-8 transition-[padding] duration-300 ease-[cubic-bezier(.76,0,.24,1)] ${scrolled ? 'py-1.5' : 'py-3.5'}`}>
           <div className="font-[Anton] text-[15px] tracking-wide">MARIA<span className="text-[oklch(0.52_0.24_292)]">.</span></div>
           <div className="hidden md:flex flex-wrap gap-2 md:gap-5 items-center text-[13px] font-semibold">
@@ -684,20 +687,28 @@ export default function Portfolio() {
               className="bg-[oklch(0.16_0_0)] text-white px-3.5 py-2 min-h-8 box-border inline-flex items-center rounded-full font-bold whitespace-nowrap transition-transform duration-200 active:scale-95 active:bg-[oklch(0.52_0.24_292)]"
             >Fale comigo</a>
           </div>
+          {/* Botão hambúrguer ↔ X: as 3 barras rotacionam para formar o X.
+              z-[60] fica acima do drawer (z-[55]); em telas com notch o
+              padding-top do NAV já o afasta da status bar. */}
           <button
             type="button"
-            aria-label="Abrir menu"
+            aria-label={menuOpen ? 'Fechar menu' : 'Abrir menu'}
             aria-expanded={menuOpen}
-            onClick={() => setMenuOpen(true)}
-            className="md:hidden relative z-[60] w-9 h-9 inline-flex flex-col items-center justify-center gap-[5px] -mr-1 transition-opacity duration-200"
-            style={{
-              opacity: menuOpen ? 0 : 1,
-              pointerEvents: menuOpen ? 'none' : 'auto',
-            }}
+            onClick={() => setMenuOpen((v) => !v)}
+            className="md:hidden relative z-[60] w-9 h-9 inline-flex flex-col items-center justify-center gap-[5px] -mr-1"
           >
-            <span className="block w-6 h-[2px] bg-[oklch(0.16_0_0)]" />
-            <span className="block w-6 h-[2px] bg-[oklch(0.16_0_0)]" />
-            <span className="block w-6 h-[2px] bg-[oklch(0.16_0_0)]" />
+            <span
+              className="block w-6 h-[2px] bg-[oklch(0.16_0_0)] transition-transform duration-300 ease-[cubic-bezier(.76,0,.24,1)]"
+              style={{ transform: menuOpen ? 'translateY(7px) rotate(45deg)' : 'none' }}
+            />
+            <span
+              className="block w-6 h-[2px] bg-[oklch(0.16_0_0)] transition-opacity duration-200"
+              style={{ opacity: menuOpen ? 0 : 1 }}
+            />
+            <span
+              className="block w-6 h-[2px] bg-[oklch(0.16_0_0)] transition-transform duration-300 ease-[cubic-bezier(.76,0,.24,1)]"
+              style={{ transform: menuOpen ? 'translateY(-7px) rotate(-45deg)' : 'none' }}
+            />
           </button>
         </div>
       </div>
@@ -719,18 +730,6 @@ export default function Portfolio() {
           transition: 'transform .5s cubic-bezier(.76,0,.24,1)',
         }}
       >
-        <button
-          type="button"
-          onClick={() => setMenuOpen(false)}
-          aria-label="Fechar menu"
-          className="absolute top-4 right-6 w-10 h-10 inline-flex items-center justify-center rounded-full bg-[oklch(0.16_0_0/0.06)] active:bg-[oklch(0.16_0_0/0.14)] text-[oklch(0.16_0_0)] text-2xl leading-none transition-colors duration-200"
-          style={{
-            top: 'max(1rem, env(safe-area-inset-top))',
-            opacity: menuOpen ? 1 : 0,
-            transition: 'opacity .3s ease, background-color .2s ease',
-            transitionDelay: menuOpen ? '0.2s' : '0s',
-          }}
-        >✕</button>
         {['sobre', 'videos', 'projetos'].map((id, i) => (
           <a
             key={id}
