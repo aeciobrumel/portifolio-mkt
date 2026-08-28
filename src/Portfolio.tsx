@@ -13,15 +13,25 @@ function useIsTouch(): boolean {
  * Trava a experiência em retrato NO CELULAR. `screen.orientation.lock` só
  * funciona em parte dos Androids, então o que realmente segura em todo
  * aparelho — iPhone incluído — é o overlay que o retorno deste hook dispara.
- * No desktop nunca ativa.
+ *
+ * `active` (pointer:coarse) não basta: notebooks com tela sensível ao toque
+ * também são coarse. Por isso o overlay só aparece quando, ALÉM de coarse e
+ * paisagem, o aparelho tem cara de celular deitado — lado menor <= 500px e
+ * lado maior <= 950px. Um desktop deitado nunca passa nisso.
  */
 function useLockPortrait(active: boolean): boolean {
-  const [isLandscape, setIsLandscape] = useState(false);
+  const [locked, setLocked] = useState(false);
   useEffect(() => {
-    if (!active) return;
-    const mq = window.matchMedia('(orientation: landscape)');
-    const update = () => setIsLandscape(mq.matches && window.innerWidth > window.innerHeight);
+    if (!active) { setLocked(false); return; }
+    const update = () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const isLandscape = w > h;
+      const looksLikePhone = Math.min(w, h) <= 500 && Math.max(w, h) <= 950;
+      setLocked(isLandscape && looksLikePhone);
+    };
     update();
+    const mq = window.matchMedia('(orientation: landscape)');
     mq.addEventListener('change', update);
     window.addEventListener('resize', update);
     const so = screen.orientation as (ScreenOrientation & { lock?: (o: string) => Promise<void> }) | undefined;
@@ -31,7 +41,7 @@ function useLockPortrait(active: boolean): boolean {
       window.removeEventListener('resize', update);
     };
   }, [active]);
-  return active && isLandscape;
+  return locked;
 }
 
 function useMediaQuery(query: string): boolean {
