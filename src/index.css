@@ -34,3 +34,9 @@ a:hover { color: oklch(0.4 0.24 292); }
 
 .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Serviços: 2 colunas no mobile, auto-fit no desktop */
+.servicos-grid { grid-template-columns: 1fr 1fr; }
+@media (min-width: 640px) {
+  .servicos-grid { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+}

@@ -2,13 +2,24 @@ import video1 from './img/VIDEO1.mp4';
 import video2 from './img/VIDEO2.mp4';
 import video3 from './img/VIDEO3.mp4';
 import video4 from './img/VIDEO4.mp4';
-import produto1 from './img/PRODUTO1.png';
-import produto2 from './img/PRODUTO2.png';
-import produto3 from './img/PRODUTO3.png';
-import produto4 from './img/PRODUTO4.png';
-import produto5 from './img/PRODUTO5.png';
-import produto6 from './img/PRODUTO6.png';
-import produto7 from './img/PRODUTO7.png';
+import produto1 from './img/PRODUTO1.webp';
+import produto2 from './img/PRODUTO2.webp';
+import produto3 from './img/PRODUTO3.webp';
+import produto4 from './img/PRODUTO4.webp';
+import produto5 from './img/PRODUTO5.webp';
+import produto6 from './img/PRODUTO6.webp';
+import produto7 from './img/PRODUTO7.webp';
+import designGrafico1 from './img/2PRODUTO1.webp';
+import designGrafico2 from './img/2PRODUTO2.webp';
+import designGrafico3 from './img/2PRODUTO3.webp';
+import designGrafico4 from './img/2PRODUTO4.webp';
+import designGrafico5 from './img/2PRODUTO5.webp';
+import designGrafico6 from './img/2PRODUTO6.webp';
+import panfleto1 from './img/3PRODUTO1.webp';
+import panfleto2 from './img/3PRODUTO2.webp';
+import perfil from './img/perfil.webp';
+
+export const PERFIL_IMG = perfil;
 
 export interface Servico {
   num: string;
@@ -37,14 +48,14 @@ export const PROJETOS: Projeto[] = [
     imagens: [produto1, produto2, produto3, produto4, produto5, produto6, produto7],
   },
   {
-    titulo: 'Campanha para App de Saúde Mental',
-    desc: 'Planejamento de conteúdo e mídia paga para aquisição de usuários de um app de bem-estar.',
-    imagens: ['', '', ''],
+    titulo: 'Design Gráfico',
+    desc: 'Criação de peças para redes sociais.',
+    imagens: [designGrafico1, designGrafico2, designGrafico3, designGrafico4, designGrafico5, designGrafico6],
   },
   {
-    titulo: 'Gerenciamento de Marketing e Instagram',
-    desc: 'Gestão completa de redes sociais e estratégia de marketing para clientes da Estácio.',
-    imagens: ['', '', ''],
+    titulo: 'Design Panfletos de Divulgação',
+    desc: 'Materiais desenvolvidos para 5 polos institucionais.',
+    imagens: [panfleto1, panfleto2],
   },
 ];
 

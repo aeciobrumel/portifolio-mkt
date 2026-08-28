@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { SERVICOS, PROJETOS, VIDEOS_INFO, TAGS, MARQUEE_WORDS } from './content';
+import { SERVICOS, PROJETOS, VIDEOS_INFO, TAGS, MARQUEE_WORDS, PERFIL_IMG } from './content';
 
 function useIsTouch(): boolean {
   const [isTouch, setIsTouch] = useState(false);
@@ -184,7 +184,7 @@ function useCoverflow(ref: React.RefObject<HTMLDivElement>, realCount: number, c
     window.addEventListener('resize', layout, { passive: true });
     window.addEventListener('load', layout);
     // Cards can change size after mount — fonts finishing load, images
-    // decoding, viewport width landing at a size where `min(62vw,320px)`
+    // decoding, viewport width landing at a size where `min(42vw,214px)`
     // resolves differently — any of which would otherwise leave the
     // padding/centering computed against stale card widths. Observing the
     // track itself isn't enough (its own size is fixed by the parent
@@ -343,7 +343,9 @@ interface SectionEntry {
   done: boolean;
 }
 
-const CAROUSEL_CLONE_COUNT = Math.min(2, VIDEOS_INFO.length);
+// Clone the full set at each end so the infinite loop never runs out of
+// runway, even with small cards where many are visible past the center.
+const CAROUSEL_CLONE_COUNT = VIDEOS_INFO.length;
 
 export default function Portfolio() {
   const isTouch = useIsTouch();
@@ -510,9 +512,9 @@ export default function Portfolio() {
     <div className="w-full overflow-x-hidden text-[oklch(0.16_0_0)]" style={{ cursor: isTouch ? 'auto' : 'none' }}>
       {!isTouch && (
         <>
-          <div ref={cursorDot} className="fixed top-0 left-0 w-2 h-2 -mt-1 -ml-1 rounded-full bg-[oklch(0.16_0_0)] pointer-events-none z-[9999] will-change-transform" />
-          <div ref={cursorRing} className="fixed top-0 left-0 w-3.5 h-3.5 -mt-[7px] -ml-[7px] rounded-full border border-[1.5px] border-[oklch(0.52_0.24_292)] pointer-events-none z-[9998] mix-blend-difference transition-[width,height,margin,background] duration-200 will-change-transform" />
-          <div ref={cursorLabel} className="fixed top-0 left-0 -mt-[30px] -ml-[30px] w-[60px] h-[60px] flex items-center justify-center text-white text-[11px] font-extrabold tracking-wide pointer-events-none z-[10000] opacity-0 transition-opacity duration-200 will-change-transform" />
+          <div ref={cursorDot} className="fixed top-0 left-0 w-1.5 h-1.5 -mt-[3px] -ml-[3px] rounded-full bg-[oklch(0.16_0_0)] pointer-events-none z-[9999] will-change-transform" />
+          <div ref={cursorRing} className="fixed top-0 left-0 w-2.5 h-2.5 -mt-[5px] -ml-[5px] rounded-full border border-[1.5px] border-[oklch(0.52_0.24_292)] pointer-events-none z-[9998] mix-blend-difference transition-[width,height,margin,background] duration-200 will-change-transform" />
+          <div ref={cursorLabel} className="fixed top-0 left-0 -mt-[20px] -ml-[20px] w-10 h-10 flex items-center justify-center text-white text-[10px] font-extrabold tracking-wide pointer-events-none z-[10000] opacity-0 transition-opacity duration-200 will-change-transform" />
         </>
       )}
 
@@ -525,9 +527,9 @@ export default function Portfolio() {
           className="fixed inset-0 z-[10001] bg-[oklch(0.16_0_0)] flex flex-col items-center justify-center"
           style={{ opacity: loaded ? 0 : 1, transform: `translateY(${loaded ? '-100%' : '0'})`, transition: 'opacity .5s ease .3s, transform .8s cubic-bezier(.76,0,.24,1) .1s' }}
         >
-          <div className="absolute top-8 left-10 font-[Anton] text-white text-lg">MARIA<span className="text-[oklch(0.52_0.24_292)]">.</span></div>
-          <div className="font-[Anton] text-white leading-none" style={{ fontSize: 'min(20vw,160px)' }}>{loadPct}<span className="text-[oklch(0.52_0.24_292)]">%</span></div>
-          <div className="w-[220px] h-0.5 bg-white/15 mt-6 overflow-hidden">
+          <div className="absolute top-5 left-7 font-[Anton] text-white text-base">MARIA<span className="text-[oklch(0.52_0.24_292)]">.</span></div>
+          <div className="font-[Anton] text-white leading-none" style={{ fontSize: 'min(13vw,107px)' }}>{loadPct}<span className="text-[oklch(0.52_0.24_292)]">%</span></div>
+          <div className="w-[147px] h-0.5 bg-white/15 mt-4 overflow-hidden">
             <div className="h-full bg-[oklch(0.52_0.24_292)] transition-[width] duration-200" style={{ width: loadPct + '%' }} />
           </div>
         </div>
@@ -538,19 +540,19 @@ export default function Portfolio() {
         onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
         onMouseEnter={cursorEnter}
         onMouseLeave={cursorLeave}
-        className="fixed bottom-4 right-4 md:bottom-7 md:right-7 w-12 h-12 rounded-full bg-[oklch(0.16_0_0)] text-white flex items-center justify-center text-lg cursor-pointer z-[9995] opacity-0 pointer-events-none transition-[opacity,transform] duration-300"
+        className="fixed bottom-3 right-3 md:bottom-5 md:right-5 w-8 h-8 rounded-full bg-[oklch(0.16_0_0)] text-white flex items-center justify-center text-base cursor-pointer z-[9995] opacity-0 pointer-events-none transition-[opacity,transform] duration-300"
       >↑</div>
 
       {/* NAV */}
-      <div className="sticky top-0 z-50 flex flex-wrap items-center justify-between gap-4 px-4 md:px-12 py-5 bg-[oklch(0.97_0.008_90/0.85)] backdrop-blur-sm border-b border-[oklch(0.16_0_0/0.08)]">
-        <div className="font-[Anton] text-[22px] tracking-wide">MARIA<span className="text-[oklch(0.52_0.24_292)]">.</span></div>
-        <div className="flex flex-wrap gap-3 md:gap-8 items-center text-sm font-semibold">
+      <div className="sticky top-0 z-50 flex flex-wrap items-center justify-between gap-3 px-3 md:px-8 py-3.5 bg-[oklch(0.97_0.008_90/0.85)] backdrop-blur-sm border-b border-[oklch(0.16_0_0/0.08)]">
+        <div className="font-[Anton] text-[15px] tracking-wide">MARIA<span className="text-[oklch(0.52_0.24_292)]">.</span></div>
+        <div className="flex flex-wrap gap-2 md:gap-5 items-center text-[13px] font-semibold">
           <a href="#sobre" onMouseEnter={cursorEnter} onMouseLeave={cursorLeave} className="text-[oklch(0.16_0_0)] hover:text-[oklch(0.52_0.24_292)]">Sobre</a>
           <a href="#videos" onMouseEnter={cursorEnter} onMouseLeave={cursorLeave} className="text-[oklch(0.16_0_0)] hover:text-[oklch(0.52_0.24_292)]">Conteúdos</a>
           <a href="#projetos" onMouseEnter={cursorEnter} onMouseLeave={cursorLeave} className="text-[oklch(0.16_0_0)] hover:text-[oklch(0.52_0.24_292)]">Projetos</a>
           <a
             ref={navCta} href="#contato" onMouseMove={navMag.onMove} onMouseLeave={navMag.onLeave}
-            className="bg-[oklch(0.16_0_0)] text-white px-5 py-3 min-h-11 box-border inline-flex items-center rounded-full font-bold whitespace-nowrap transition-transform duration-200 active:scale-95 active:bg-[oklch(0.52_0.24_292)]"
+            className="bg-[oklch(0.16_0_0)] text-white px-3.5 py-2 min-h-8 box-border inline-flex items-center rounded-full font-bold whitespace-nowrap transition-transform duration-200 active:scale-95 active:bg-[oklch(0.52_0.24_292)]"
           >Fale comigo</a>
         </div>
       </div>
@@ -558,14 +560,14 @@ export default function Portfolio() {
       {/* HERO */}
       <div
         className="flex flex-col items-center justify-center text-center px-5 relative"
-        style={{ padding: 'clamp(60px,15vw,100px) 20px clamp(40px,10vw,70px)', backgroundImage: 'radial-gradient(closest-side, oklch(0.52 0.24 292 / 0.14), transparent 70%)', backgroundPosition: 'center 42%', backgroundRepeat: 'no-repeat', backgroundSize: '130% 130%' }}
+        style={{ padding: 'clamp(40px,10vw,67px) 20px clamp(27px,7vw,47px)', backgroundImage: 'radial-gradient(closest-side, oklch(0.52 0.24 292 / 0.14), transparent 70%)', backgroundPosition: 'center 42%', backgroundRepeat: 'no-repeat', backgroundSize: '130% 130%' }}
       >
         <div
           className="font-bold uppercase text-[oklch(0.45_0_0)] whitespace-nowrap"
-          style={{ fontSize: 'clamp(11px,3vw,13px)', letterSpacing: 'clamp(1.5px,0.8vw,3px)', marginBottom: 'clamp(32px,8vw,52px)', ...heroIntro(0.05) }}
+          style={{ fontSize: 'clamp(10px,2vw,11px)', letterSpacing: 'clamp(1px,0.5vw,2px)', marginBottom: 'clamp(21px,5vw,35px)', ...heroIntro(0.05) }}
         >Sejam bem-vindos</div>
         <div className="relative leading-[0.82]">
-          <div className="font-[Anton]" style={{ fontSize: 'clamp(40px,15vw,190px)', letterSpacing: '-0.03em' }}>
+          <div className="font-[Anton]" style={{ fontSize: 'clamp(27px,10vw,127px)', letterSpacing: '-0.03em' }}>
             {'PORTFOLIO'.split('').map((ch, i) => (
               <span key={i} className="inline-block" style={{
                 opacity: heroIn ? 1 : 0,
@@ -577,55 +579,55 @@ export default function Portfolio() {
           <div
             className="absolute top-1/2 left-1/2 whitespace-nowrap [font-family:'Miss_Fajardose']"
             style={{
-              transform: 'translate(-50%,-50%) rotate(-7deg)', fontSize: 'clamp(60px,20vw,240px)', letterSpacing: '0.02em',
-              color: 'oklch(0.52 0.24 292)', WebkitTextStroke: '8px oklch(0.97 0.008 90)', paintOrder: 'stroke fill',
+              transform: 'translate(-50%,-50%) rotate(-7deg)', fontSize: 'clamp(40px,13vw,160px)', letterSpacing: '0.02em',
+              color: 'oklch(0.52 0.24 292)', WebkitTextStroke: '5px oklch(0.97 0.008 90)', paintOrder: 'stroke fill',
               opacity: heroIn ? 1 : 0, transition: 'opacity .9s cubic-bezier(.16,1,.3,1) 0.6s',
             }}
           >Maria</div>
         </div>
-        <div className="flex items-center gap-2 md:gap-4 mt-8" style={heroIntro(1.05)}>
-          <div className="flex-1 max-w-16 min-w-4 h-px bg-[oklch(0.16_0_0/0.3)]" />
-          <div className="font-bold tracking-wide whitespace-nowrap" style={{ fontSize: 'clamp(11px,3vw,14px)' }}>Marketing Digital</div>
-          <div className="flex-1 max-w-16 min-w-4 h-px bg-[oklch(0.16_0_0/0.3)]" />
+        <div className="flex items-center gap-1.5 md:gap-2.5 mt-5" style={heroIntro(1.05)}>
+          <div className="flex-1 max-w-11 min-w-3 h-px bg-[oklch(0.16_0_0/0.3)]" />
+          <div className="font-bold tracking-wide whitespace-nowrap" style={{ fontSize: 'clamp(10px,2vw,11px)' }}>Marketing Digital</div>
+          <div className="flex-1 max-w-11 min-w-3 h-px bg-[oklch(0.16_0_0/0.3)]" />
         </div>
-        <div className="font-semibold text-[oklch(0.45_0_0)] tracking-wide" style={{ marginTop: 'clamp(40px,8vw,70px)', fontSize: 'clamp(11px,3vw,13px)', ...heroIntro(1.2) }}>role para conhecer meu trabalho ↓</div>
+        <div className="font-semibold text-[oklch(0.45_0_0)] tracking-wide" style={{ marginTop: 'clamp(27px,5vw,47px)', fontSize: 'clamp(10px,2vw,11px)', ...heroIntro(1.2) }}>role para conhecer meu trabalho ↓</div>
       </div>
 
       {/* MARQUEE */}
-      <div className="overflow-hidden bg-[oklch(0.16_0_0)] py-4 -my-1.5 mb-9" style={{ transform: 'rotate(-1.1deg)' }}>
+      <div className="overflow-hidden bg-[oklch(0.16_0_0)] py-2.5 -my-1 mb-6" style={{ transform: 'rotate(-1.1deg)' }}>
         <div className="flex w-max whitespace-nowrap" style={{ animation: 'marqueeScroll 26s linear infinite' }}>
           {[...MARQUEE_WORDS, ...MARQUEE_WORDS, ...MARQUEE_WORDS, ...MARQUEE_WORDS].map((m, i) => (
-            <div key={i} className="font-[Anton] text-2xl text-white tracking-wide px-[22px]">{m}</div>
+            <div key={i} className="font-[Anton] text-base text-white tracking-wide px-[15px]">{m}</div>
           ))}
         </div>
       </div>
 
       {/* SOBRE */}
-      <div id="sobre" className="max-w-6xl mx-auto flex flex-wrap gap-12 items-center" style={{ padding: '44px clamp(20px,5vw,48px) 100px' }}>
+      <div id="sobre" className="max-w-6xl mx-auto flex flex-wrap gap-8 items-center" style={{ padding: '30px clamp(20px,5vw,48px) 67px' }}>
         <Reveal id="sobre-text" onRegister={registerSection} className="flex-1 min-w-[320px]">
-          <div className="font-[Anton] leading-none" style={{ fontSize: 'clamp(32px,8vw,48px)' }}>OLÁ, EU SOU</div>
-          <div className="[font-family:'Miss_Fajardose'] mt-1.5" style={{ fontSize: 'clamp(40px,10vw,60px)', color: 'oklch(0.52 0.24 292)', transform: 'rotate(-2deg)' }}>Maria Eduarda</div>
-          <p className="text-[17px] leading-relaxed text-[oklch(0.28_0_0)] mt-7 max-w-[520px]">
+          <div className="font-[Anton] leading-none" style={{ fontSize: 'clamp(22px,5.5vw,32px)' }}>OLÁ, EU SOU</div>
+          <div className="[font-family:'Miss_Fajardose'] mt-1" style={{ fontSize: 'clamp(27px,7vw,40px)', color: 'oklch(0.52 0.24 292)', transform: 'rotate(-2deg)' }}>Maria Eduarda</div>
+          <p className="text-[13px] leading-relaxed text-[oklch(0.28_0_0)] mt-5 max-w-[350px]">
             Transformo ideias em conteúdo que gera resultado. Atuo com estratégia, criação e gestão de redes sociais, unindo criatividade e dados para marcas que querem crescer de verdade no digital.
           </p>
-          <div className="flex flex-wrap gap-2.5 mt-7">
+          <div className="flex flex-wrap gap-2 mt-5">
             {TAGS.map((tag) => (
-              <div key={tag} className="border-[1.5px] border-[oklch(0.16_0_0/0.25)] px-4 py-2 rounded-full text-[13px] font-bold">{tag}</div>
+              <div key={tag} className="border-[1.5px] border-[oklch(0.16_0_0/0.25)] px-2.5 py-1.5 rounded-full text-[11px] font-bold">{tag}</div>
             ))}
           </div>
-          <div className="mt-9 pt-6 border-t border-[oklch(0.16_0_0/0.12)] font-bold text-[13px] tracking-wide uppercase">Marketing Digital</div>
+          <div className="mt-6 pt-4 border-t border-[oklch(0.16_0_0/0.12)] font-bold text-[11px] tracking-wide uppercase">Marketing Digital</div>
         </Reveal>
         <Reveal id="sobre-photo" delay={0.15} onRegister={registerSection} className="relative flex-1 min-w-[200px] mx-auto" >
           <div
             ref={photo} onMouseMove={photoTilt.onMove} onMouseLeave={photoTilt.onLeave} onMouseEnter={cursorEnter}
-            className="relative mx-auto" style={{ maxWidth: 'min(55vw,360px)' }}
+            className="relative mx-auto" style={{ maxWidth: 'min(37vw,240px)' }}
           >
-            <div className="w-full rounded-lg overflow-hidden grayscale contrast-[1.05] bg-[oklch(0.9_0.005_90)] flex items-center justify-center text-sm text-[oklch(0.5_0_0)]" style={{ aspectRatio: '4/5' }}>
-              Foto de perfil (P&B)
+            <div className="w-full rounded-lg overflow-hidden grayscale contrast-[1.05] bg-[oklch(0.9_0.005_90)]" style={{ aspectRatio: '4/5' }}>
+              <img src={PERFIL_IMG} alt="Maria Eduarda" className="w-full h-full object-cover block" style={{ objectPosition: 'center 5%' }} />
             </div>
             <div
-              className="absolute -bottom-3.5 -right-3.5 rounded-full bg-[oklch(0.52_0.24_292)] flex items-center justify-center font-[Anton] text-white text-center leading-tight"
-              style={{ width: 'clamp(60px,15vw,90px)', height: 'clamp(60px,15vw,90px)', fontSize: 'clamp(10px,3vw,13px)', transform: 'rotate(-8deg)' }}
+              className="absolute -bottom-2.5 -right-2.5 rounded-full bg-[oklch(0.52_0.24_292)] flex items-center justify-center font-[Anton] text-white text-center leading-tight"
+              style={{ width: 'clamp(40px,10vw,60px)', height: 'clamp(40px,10vw,60px)', fontSize: 'clamp(9px,2vw,11px)', transform: 'rotate(-8deg)' }}
             >2026</div>
           </div>
         </Reveal>
@@ -635,18 +637,17 @@ export default function Portfolio() {
       <div
         ref={services} onMouseMove={onServicesMove}
         className="relative bg-[oklch(0.16_0_0)] text-white"
-        style={{ padding: 'clamp(56px,10vw,90px) clamp(20px,5vw,48px)', backgroundImage: 'radial-gradient(480px circle at var(--sx,50%) var(--sy,50%), oklch(0.52 0.24 292 / 0.22), transparent 60%)' }}
+        style={{ padding: 'clamp(44px,9vw,60px) clamp(20px,5vw,48px)', backgroundImage: 'radial-gradient(480px circle at var(--sx,50%) var(--sy,50%), oklch(0.52 0.24 292 / 0.22), transparent 60%)' }}
       >
         <div className="max-w-6xl mx-auto relative">
           <Reveal id="servicos-header" onRegister={registerSection}>
-            <div className="font-[Anton]" style={{ fontSize: 'clamp(28px,7vw,40px)', marginBottom: 'clamp(32px,6vw,48px)' }}>O QUE EU FAÇO</div>
+            <div className="font-[Anton]" style={{ fontSize: 'clamp(20px,4.5vw,28px)', marginBottom: 'clamp(28px,7vw,32px)' }}>O QUE EU FAÇO</div>
           </Reveal>
-          <div className="grid gap-9" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))' }}>
+          <div className="servicos-grid grid" style={{ gap: 'clamp(28px,7vw,24px) clamp(16px,4vw,24px)' }}>
             {SERVICOS.map((s, i) => (
               <Reveal key={s.num} id={`servico-${i}`} delay={i * 0.1} onRegister={registerSection}>
-                <div className="font-[Anton] text-4xl text-[oklch(0.52_0.24_292)]">{s.num}</div>
-                <div className="text-lg font-extrabold mt-2.5">{s.titulo}</div>
-                <div className="text-sm leading-relaxed text-[oklch(0.75_0_0)] mt-2">{s.desc}</div>
+                <div className="font-[Anton] text-[oklch(0.52_0.24_292)]" style={{ fontSize: 'clamp(18px,4.5vw,24px)' }}>{s.num}</div>
+                <div className="text-sm sm:text-base font-extrabold mt-1">{s.titulo}</div>
               </Reveal>
             ))}
           </div>
@@ -654,15 +655,15 @@ export default function Portfolio() {
       </div>
 
       {/* CONTEÚDOS */}
-      <div id="videos" className="max-w-6xl mx-auto" style={{ padding: 'clamp(56px,10vw,100px) clamp(20px,5vw,48px) clamp(48px,8vw,90px)' }}>
-        <Reveal id="videos-header" onRegister={registerSection} className="mb-10">
-          <div className="text-[13px] font-bold tracking-widest uppercase text-[oklch(0.52_0.24_292)]">Carrossel</div>
-          <div className="font-[Anton] leading-tight" style={{ fontSize: 'clamp(28px,7vw,44px)' }}>CONTEÚDOS EM DESTAQUE</div>
+      <div id="videos" className="max-w-6xl mx-auto" style={{ padding: 'clamp(37px,7vw,67px) clamp(20px,5vw,48px) clamp(32px,5vw,60px)' }}>
+        <Reveal id="videos-header" onRegister={registerSection} className="mb-6">
+          <div className="text-[11px] font-bold tracking-widest uppercase text-[oklch(0.52_0.24_292)]">Carrossel</div>
+          <div className="font-[Anton] leading-tight" style={{ fontSize: 'clamp(19px,4.5vw,29px)' }}>CONTEÚDOS EM DESTAQUE</div>
         </Reveal>
         <div
           ref={carousel}
           className="flex items-center overflow-x-auto no-scrollbar"
-          style={{ perspective: '1200px', touchAction: 'pan-x', paddingTop: '64px', paddingBottom: '64px', gap: 'clamp(16px,4vw,48px)' }}
+          style={{ perspective: '1200px', touchAction: 'pan-x', paddingTop: '43px', paddingBottom: '43px', gap: 'clamp(11px,3vw,32px)' }}
         >
           {loopedVideos.map((v, slot) => (
             <VideoCard
@@ -675,18 +676,18 @@ export default function Portfolio() {
       </div>
 
       {/* PROJETOS */}
-      <div id="projetos" className="bg-[oklch(0.93_0.01_90)]" style={{ padding: 'clamp(56px,10vw,100px) clamp(20px,5vw,48px)' }}>
+      <div id="projetos" className="bg-[oklch(0.93_0.01_90)]" style={{ padding: 'clamp(37px,7vw,67px) clamp(20px,5vw,48px)' }}>
         <div className="max-w-6xl mx-auto">
           <Reveal id="projetos-header" onRegister={registerSection}>
-            <div className="text-[13px] font-bold tracking-widest uppercase text-[oklch(0.52_0.24_292)]">Trabalhos</div>
-            <div className="font-[Anton]" style={{ fontSize: 'clamp(28px,7vw,44px)', marginBottom: 'clamp(32px,6vw,48px)' }}>PROJETOS</div>
+            <div className="text-[11px] font-bold tracking-widest uppercase text-[oklch(0.52_0.24_292)]">Trabalhos</div>
+            <div className="font-[Anton]" style={{ fontSize: 'clamp(19px,4.5vw,29px)', marginBottom: 'clamp(21px,4vw,32px)' }}>PROJETOS</div>
           </Reveal>
-          <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(min(260px,100%),1fr))', gap: 'clamp(40px,8vw,32px)' }}>
+          <div className="grid mx-auto" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(min(160px,100%),1fr))', gap: 'clamp(20px,4vw,28px)', maxWidth: '760px' }}>
             {PROJETOS.map((p, i) => (
               <Reveal key={p.titulo} id={`projeto-${i}`} delay={i * 0.1} onRegister={registerSection}>
                 <ProjectCarousel imagens={p.imagens} titulo={p.titulo} />
-                <div className="mt-6 font-extrabold text-lg">{p.titulo}</div>
-                <div className="text-sm leading-relaxed text-[oklch(0.4_0_0)] mt-1.5">{p.desc}</div>
+                <div className="mt-3 font-extrabold text-sm">{p.titulo}</div>
+                <div className="text-[12px] leading-relaxed text-[oklch(0.4_0_0)] mt-0.5">{p.desc}</div>
               </Reveal>
             ))}
           </div>
@@ -694,19 +695,19 @@ export default function Portfolio() {
       </div>
 
       {/* CONTATO */}
-      <div id="contato" className="max-w-6xl mx-auto text-center" style={{ padding: 'clamp(64px,12vw,110px) clamp(20px,5vw,48px) clamp(40px,8vw,60px)' }}>
+      <div id="contato" className="max-w-6xl mx-auto text-center" style={{ padding: 'clamp(43px,8vw,73px) clamp(20px,5vw,48px) clamp(27px,5vw,40px)' }}>
         <Reveal id="contato-header" onRegister={registerSection}>
-          <div className="font-[Anton] leading-tight" style={{ fontSize: 'min(9vw,64px)' }}>
+          <div className="font-[Anton] leading-tight" style={{ fontSize: 'min(6vw,43px)' }}>
             VAMOS CRIAR ALGO<br />
             <span className="[font-family:'Miss_Fajardose'] inline-block" style={{ color: 'oklch(0.52 0.24 292)', fontSize: '1.9em', verticalAlign: 'middle', lineHeight: 0.6 }}>incrível</span> JUNTOS?
           </div>
         </Reveal>
-        <div className="flex flex-col items-center gap-4 font-bold break-words" style={{ marginTop: 'clamp(32px,6vw,48px)', fontSize: 'clamp(14px,4vw,16px)' }}>
+        <div className="flex flex-col items-center gap-2.5 font-bold break-words" style={{ marginTop: 'clamp(21px,4vw,32px)', fontSize: 'clamp(12px,3vw,13px)' }}>
           <a ref={email} onMouseMove={emailMag.onMove} onMouseLeave={emailMag.onLeave} onMouseEnter={cursorEnter} href="mailto:dudinha.silveiraalves@gmail.com" className="inline-block transition-transform duration-200 active:scale-95">dudinha.silveiraalves@gmail.com</a>
           <a ref={whats} onMouseMove={whatsMag.onMove} onMouseLeave={whatsMag.onLeave} onMouseEnter={cursorEnter} href="https://wa.me/5551995068619" className="inline-block transition-transform duration-200 active:scale-95">(51) 99506-8619</a>
           <a ref={insta} onMouseMove={instaMag.onMove} onMouseLeave={instaMag.onLeave} onMouseEnter={cursorEnter} href="https://instagram.com/mariaesalvees" className="inline-block transition-transform duration-200 active:scale-95">@mariaesalvees</a>
         </div>
-        <div className="pt-6 border-t border-[oklch(0.16_0_0/0.12)] text-[13px] text-[oklch(0.45_0_0)] flex justify-center text-center flex-wrap gap-3" style={{ marginTop: 'clamp(48px,10vw,90px)' }}>
+        <div className="pt-4 border-t border-[oklch(0.16_0_0/0.12)] text-[11px] text-[oklch(0.45_0_0)] flex justify-center text-center flex-wrap gap-2" style={{ marginTop: 'clamp(32px,7vw,60px)' }}>
           <div>Portfolio © 2026</div>
           <div>Maria Eduarda — Marketing Digital</div>
         </div>
@@ -723,6 +724,7 @@ interface ProjectCarouselProps {
 function ProjectCarousel({ imagens, titulo }: ProjectCarouselProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
+  const isTouch = useIsTouch();
   useDragScroll(trackRef);
 
   const onScroll = useCallback(() => {
@@ -735,19 +737,22 @@ function ProjectCarousel({ imagens, titulo }: ProjectCarouselProps) {
   const goTo = (idx: number) => {
     const el = trackRef.current;
     if (!el) return;
-    el.scrollTo({ left: idx * el.clientWidth, behavior: 'smooth' });
+    const clamped = Math.min(imagens.length - 1, Math.max(0, idx));
+    el.scrollTo({ left: clamped * el.clientWidth, behavior: 'smooth' });
   };
 
+  const showArrows = !isTouch && imagens.length > 1;
+
   return (
-    <div className="relative">
+    <div className="relative group">
       <div
         ref={trackRef}
         onScroll={onScroll}
-        className="flex overflow-x-auto rounded-[10px] bg-[oklch(0.9_0.005_90)]"
+        className="flex overflow-x-auto no-scrollbar rounded-[7px] bg-[oklch(0.9_0.005_90)]"
         style={{ aspectRatio: '4/5', scrollSnapType: 'x mandatory' }}
       >
         {imagens.map((src, idx) => (
-          <div key={idx} className="flex-none w-full h-full flex items-center justify-center text-sm text-[oklch(0.5_0_0)]" style={{ scrollSnapAlign: 'start' }}>
+          <div key={idx} className="flex-none w-full h-full flex items-center justify-center text-[13px] text-[oklch(0.5_0_0)]" style={{ scrollSnapAlign: 'start' }}>
             {src ? (
               <img src={src} alt={`${titulo} — imagem ${idx + 1}`} className="w-full h-full object-cover block" />
             ) : (
@@ -756,8 +761,26 @@ function ProjectCarousel({ imagens, titulo }: ProjectCarouselProps) {
           </div>
         ))}
       </div>
+      {showArrows && (
+        <>
+          <button
+            type="button"
+            aria-label="Imagem anterior"
+            onClick={() => goTo(active - 1)}
+            disabled={active === 0}
+            className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-[oklch(0.16_0_0/0.55)] text-white text-lg leading-none flex items-center justify-center backdrop-blur-sm opacity-70 group-hover:opacity-100 disabled:!opacity-0 transition-opacity duration-200 hover:bg-[oklch(0.16_0_0/0.8)]"
+          >‹</button>
+          <button
+            type="button"
+            aria-label="Próxima imagem"
+            onClick={() => goTo(active + 1)}
+            disabled={active === imagens.length - 1}
+            className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-[oklch(0.16_0_0/0.55)] text-white text-lg leading-none flex items-center justify-center backdrop-blur-sm opacity-70 group-hover:opacity-100 disabled:!opacity-0 transition-opacity duration-200 hover:bg-[oklch(0.16_0_0/0.8)]"
+          >›</button>
+        </>
+      )}
       {imagens.length > 1 && (
-        <div className="flex justify-center gap-2 mt-4 mb-2">
+        <div className="flex justify-center gap-1.5 mt-2.5 mb-1.5">
           {imagens.map((_, idx) => (
             <button
               key={idx}
@@ -766,8 +789,8 @@ function ProjectCarousel({ imagens, titulo }: ProjectCarouselProps) {
               onClick={() => goTo(idx)}
               className="rounded-full transition-[background,transform] duration-200"
               style={{
-                width: idx === active ? '18px' : '7px',
-                height: '7px',
+                width: idx === active ? '12px' : '5px',
+                height: '5px',
                 background: idx === active ? 'oklch(0.52 0.24 292)' : 'oklch(0.16 0 0 / 0.25)',
               }}
             />
@@ -818,7 +841,7 @@ function VideoCard({ slot, index, info, src, kind, cursorEnterLabel, cursorLeave
         ref={cardRef}
         onClick={() => { if (cardRef.current) onCardClick(cardRef.current); }}
         className="coverflow-card active:scale-[0.97]"
-        style={{ width: 'min(46vw,320px)', transition: 'transform 0.4s cubic-bezier(.16,1,.3,1), opacity 0.4s ease' }}
+        style={{ width: 'min(42vw,214px)', transition: 'transform 0.4s cubic-bezier(.16,1,.3,1), opacity 0.4s ease' }}
       >
         <div
           ref={tiltRef}
@@ -839,9 +862,9 @@ function VideoCard({ slot, index, info, src, kind, cursorEnterLabel, cursorLeave
               {!isPlaying && (
                 <div
                   onClick={togglePlay}
-                  className="absolute top-1/2 left-1/2 w-[60px] h-[60px] rounded-full bg-white/90 flex items-center justify-center cursor-pointer -translate-x-1/2 -translate-y-1/2 pointer-events-auto"
+                  className="absolute top-1/2 left-1/2 w-10 h-10 rounded-full bg-white/90 flex items-center justify-center cursor-pointer -translate-x-1/2 -translate-y-1/2 pointer-events-auto"
                 >
-                  <div className="w-0 h-0 border-t-[11px] border-t-transparent border-b-[11px] border-b-transparent border-l-[18px] border-l-[oklch(0.16_0_0)] ml-1" />
+                  <div className="w-0 h-0 border-t-[7px] border-t-transparent border-b-[7px] border-b-transparent border-l-[12px] border-l-[oklch(0.16_0_0)] ml-0.5" />
                 </div>
               )}
             </>
@@ -853,8 +876,8 @@ function VideoCard({ slot, index, info, src, kind, cursorEnterLabel, cursorLeave
             <div className="w-full h-full flex items-center justify-center text-sm text-[oklch(0.5_0_0)]">Thumbnail do vídeo</div>
           )}
         </div>
-        <div className="mt-3.5 font-bold text-[15px]">{info.titulo}</div>
-        <div className="text-[13px] text-[oklch(0.45_0_0)] mt-0.5">{info.tipo}</div>
+        <div className="mt-2.5 font-bold text-[12px]">{info.titulo}</div>
+        <div className="text-[11px] text-[oklch(0.45_0_0)] mt-0.5">{info.tipo}</div>
       </div>
     </Reveal>
   );
