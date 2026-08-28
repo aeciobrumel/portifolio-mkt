@@ -42,7 +42,7 @@ function useMagnetic(ref: React.RefObject<HTMLElement>, strength: number) {
  * (rendered by the caller) so wraparound can jump the scroll position
  * without any visible discontinuity.
  */
-function useCoverflow(ref: React.RefObject<HTMLDivElement>, realCount: number, cloneCount: number) {
+function useCoverflow(ref: React.RefObject<HTMLDivElement>, realCount: number, cloneCount: number, enabled = true) {
   const rafId = useRef<number | null>(null);
   const settleRafId = useRef<number | null>(null);
   const correcting = useRef(false);
@@ -190,7 +190,7 @@ function useCoverflow(ref: React.RefObject<HTMLDivElement>, realCount: number, c
 
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
+    if (!el || !enabled) return;
     layout();
     el.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', layout, { passive: true });
@@ -213,7 +213,7 @@ function useCoverflow(ref: React.RefObject<HTMLDivElement>, realCount: number, c
       if (settleRafId.current !== null) cancelAnimationFrame(settleRafId.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onScroll, layout, realCount, cloneCount]);
+  }, [onScroll, layout, realCount, cloneCount, enabled]);
 
   // Lets callers (e.g. clicking a side card) smooth-scroll a specific card
   // to center without fighting snapToNearest — which otherwise reacts to
@@ -223,6 +223,12 @@ function useCoverflow(ref: React.RefObject<HTMLDivElement>, realCount: number, c
   const scrollToCard = useCallback((card: HTMLElement) => {
     const el = ref.current;
     if (!el) return;
+    // On touch, the track is a native scroll-snap scroller with no coverflow
+    // bookkeeping — just nudge it and let CSS snap settle it.
+    if (!enabled) {
+      card.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      return;
+    }
     const positions = cardPositions(el);
     const entry = positions.find((p) => p.card === card);
     if (!entry) return;
@@ -241,7 +247,7 @@ function useCoverflow(ref: React.RefObject<HTMLDivElement>, realCount: number, c
       el.addEventListener('scrollend', release, { once: true });
     }
     setTimeout(release, 600);
-  }, [ref, cardPositions]);
+  }, [ref, cardPositions, enabled]);
 
   return { scrollToCard };
 }
@@ -375,11 +381,18 @@ export default function Portfolio() {
     if (v.src) { videoSrcs[i] = v.src; mediaKinds[i] = v.kind ?? 'video'; }
   });
   const n = VIDEOS_INFO.length;
-  const loopedVideos = [
-    ...VIDEOS_INFO.slice(n - CAROUSEL_CLONE_COUNT).map((v, i) => ({ ...v, realIndex: n - CAROUSEL_CLONE_COUNT + i })),
-    ...VIDEOS_INFO.map((v, i) => ({ ...v, realIndex: i })),
-    ...VIDEOS_INFO.slice(0, CAROUSEL_CLONE_COUNT).map((v, i) => ({ ...v, realIndex: i })),
-  ];
+  // Desktop runs the coverflow effect with an infinite loop (real set cloned at
+  // each end). On touch that machinery (manual snap + teleport + per-frame
+  // remeasure) fights the OS momentum scroller and causes jank/white-screen, so
+  // mobile just renders the real cards in a native scroll-snap track.
+  const coverflowEnabled = !isTouch;
+  const carouselVideos = coverflowEnabled
+    ? [
+        ...VIDEOS_INFO.slice(n - CAROUSEL_CLONE_COUNT).map((v, i) => ({ ...v, realIndex: n - CAROUSEL_CLONE_COUNT + i })),
+        ...VIDEOS_INFO.map((v, i) => ({ ...v, realIndex: i })),
+        ...VIDEOS_INFO.slice(0, CAROUSEL_CLONE_COUNT).map((v, i) => ({ ...v, realIndex: i })),
+      ]
+    : VIDEOS_INFO.map((v, i) => ({ ...v, realIndex: i }));
 
   const cursorDot = useRef<HTMLDivElement>(null);
   const cursorRing = useRef<HTMLDivElement>(null);
@@ -396,7 +409,7 @@ export default function Portfolio() {
   const sectionRefs = useRef<Record<string, SectionEntry>>({});
   const activeVideo = useRef<HTMLVideoElement | null>(null);
 
-  const { scrollToCard } = useCoverflow(carousel, VIDEOS_INFO.length, CAROUSEL_CLONE_COUNT);
+  const { scrollToCard } = useCoverflow(carousel, VIDEOS_INFO.length, CAROUSEL_CLONE_COUNT, coverflowEnabled);
 
   useEffect(() => {
     const lock = menuOpen || projetoAberto !== null;
@@ -772,11 +785,30 @@ export default function Portfolio() {
         <div
           ref={carousel}
           className="flex items-center overflow-x-auto no-scrollbar"
-          style={{ perspective: '1200px', touchAction: 'pan-x', paddingTop: '43px', paddingBottom: '43px', gap: 'clamp(11px,3vw,32px)' }}
+          style={{
+            perspective: '1200px',
+            touchAction: 'pan-x',
+            paddingTop: '43px',
+            paddingBottom: '43px',
+            gap: 'clamp(11px,3vw,32px)',
+            // Mobile: native momentum scroller with CSS snap. The side padding
+            // centres the first/last card; scrollPaddingInline keeps snap
+            // targets centred too.
+            ...(coverflowEnabled
+              ? null
+              : {
+                  scrollSnapType: 'x mandatory',
+                  scrollPaddingInline: 'calc(50% - min(42vw,214px) / 2)',
+                  paddingInline: 'calc(50% - min(42vw,214px) / 2)',
+                  overscrollBehaviorX: 'contain',
+                  WebkitOverflowScrolling: 'touch',
+                }),
+          }}
         >
-          {loopedVideos.map((v, slot) => (
+          {carouselVideos.map((v, slot) => (
             <VideoCard
               key={slot} slot={slot} index={v.realIndex} info={v} src={videoSrcs[v.realIndex]} kind={mediaKinds[v.realIndex]}
+              coverflow={coverflowEnabled}
               cursorEnterLabel={cursorEnterLabel} cursorLeaveLabel={cursorLeaveLabel}
               registerSection={registerSection} onVideoPlay={handleVideoPlay} onCardClick={centerCard}
             />
@@ -1002,9 +1034,11 @@ interface VideoCardProps {
   registerSection: (id: string, el: HTMLElement, setVisible: (v: boolean) => void) => void;
   onVideoPlay: (el: HTMLVideoElement) => void;
   onCardClick: (card: HTMLElement) => void;
+  /** Desktop coverflow mode. When false (touch), the card is a plain CSS snap target. */
+  coverflow: boolean;
 }
 
-function VideoCard({ slot, index, info, src, kind, cursorEnterLabel, cursorLeaveLabel, registerSection, onVideoPlay, onCardClick }: VideoCardProps) {
+function VideoCard({ slot, index, info, src, kind, coverflow, cursorEnterLabel, cursorLeaveLabel, registerSection, onVideoPlay, onCardClick }: VideoCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const tiltRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -1026,13 +1060,17 @@ function VideoCard({ slot, index, info, src, kind, cursorEnterLabel, cursorLeave
         ref={cardRef}
         onClick={() => { if (cardRef.current) onCardClick(cardRef.current); }}
         className="coverflow-card active:scale-[0.97]"
-        style={{ width: 'min(42vw,214px)', transition: 'transform 0.4s cubic-bezier(.16,1,.3,1), opacity 0.4s ease' }}
+        style={{
+          width: 'min(42vw,214px)',
+          transition: 'transform 0.4s cubic-bezier(.16,1,.3,1), opacity 0.4s ease',
+          ...(coverflow ? null : { scrollSnapAlign: 'center', scrollSnapStop: 'always' }),
+        }}
       >
         <div
           ref={tiltRef}
-          onMouseMove={tilt.onMove}
-          onMouseLeave={() => { tilt.onLeave(); cursorLeaveLabel(); }}
-          onMouseEnter={cursorEnterLabel('VER')}
+          onMouseMove={coverflow ? tilt.onMove : undefined}
+          onMouseLeave={coverflow ? () => { tilt.onLeave(); cursorLeaveLabel(); } : undefined}
+          onMouseEnter={coverflow ? cursorEnterLabel('VER') : undefined}
           className="relative w-full rounded-2xl overflow-hidden bg-[oklch(0.9_0.005_90)] transition-transform duration-100"
           style={{ aspectRatio: '9/16', touchAction: 'pan-x' }}
         >
