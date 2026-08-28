@@ -687,31 +687,35 @@ export default function Portfolio() {
               className="bg-[oklch(0.16_0_0)] text-white px-3.5 py-2 min-h-8 box-border inline-flex items-center rounded-full font-bold whitespace-nowrap transition-transform duration-200 active:scale-95 active:bg-[oklch(0.52_0.24_292)]"
             >Fale comigo</a>
           </div>
-          {/* Botão hambúrguer ↔ X: as 3 barras rotacionam para formar o X.
-              z-[60] fica acima do drawer (z-[55]); em telas com notch o
-              padding-top do NAV já o afasta da status bar. */}
-          <button
-            type="button"
-            aria-label={menuOpen ? 'Fechar menu' : 'Abrir menu'}
-            aria-expanded={menuOpen}
-            onClick={() => setMenuOpen((v) => !v)}
-            className="md:hidden relative z-[60] w-9 h-9 inline-flex flex-col items-center justify-center gap-[5px] -mr-1"
-          >
-            <span
-              className="block w-6 h-[2px] bg-[oklch(0.16_0_0)] transition-transform duration-300 ease-[cubic-bezier(.76,0,.24,1)]"
-              style={{ transform: menuOpen ? 'translateY(7px) rotate(45deg)' : 'none' }}
-            />
-            <span
-              className="block w-6 h-[2px] bg-[oklch(0.16_0_0)] transition-opacity duration-200"
-              style={{ opacity: menuOpen ? 0 : 1 }}
-            />
-            <span
-              className="block w-6 h-[2px] bg-[oklch(0.16_0_0)] transition-transform duration-300 ease-[cubic-bezier(.76,0,.24,1)]"
-              style={{ transform: menuOpen ? 'translateY(-7px) rotate(-45deg)' : 'none' }}
-            />
-          </button>
+          {/* espaço reservado no header para o botão (que vive fora do NAV) */}
+          <div className="md:hidden w-9 h-9 -mr-1" aria-hidden />
         </div>
       </div>
+
+      {/* Botão hambúrguer ↔ X — FORA do NAV de propósito: o NAV cria um
+          stacking context em z-50 e prenderia o botão atrás do drawer
+          (z-[55]). Aqui ele é fixed com z-[65], sempre acima do drawer. */}
+      <button
+        type="button"
+        aria-label={menuOpen ? 'Fechar menu' : 'Abrir menu'}
+        aria-expanded={menuOpen}
+        onClick={() => setMenuOpen((v) => !v)}
+        className="md:hidden fixed right-3 z-[65] w-9 h-9 inline-flex flex-col items-center justify-center gap-[5px]"
+        style={{ top: `calc(env(safe-area-inset-top) + ${scrolled ? '0.375rem' : '0.875rem'})`, transition: 'top .3s ease' }}
+      >
+        <span
+          className="block w-6 h-[2px] bg-[oklch(0.16_0_0)] transition-transform duration-300 ease-[cubic-bezier(.76,0,.24,1)]"
+          style={{ transform: menuOpen ? 'translateY(7px) rotate(45deg)' : 'none' }}
+        />
+        <span
+          className="block w-6 h-[2px] bg-[oklch(0.16_0_0)] transition-opacity duration-200"
+          style={{ opacity: menuOpen ? 0 : 1 }}
+        />
+        <span
+          className="block w-6 h-[2px] bg-[oklch(0.16_0_0)] transition-transform duration-300 ease-[cubic-bezier(.76,0,.24,1)]"
+          style={{ transform: menuOpen ? 'translateY(-7px) rotate(-45deg)' : 'none' }}
+        />
+      </button>
 
       {/* BACKDROP */}
       <div
