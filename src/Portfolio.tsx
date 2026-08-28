@@ -686,23 +686,18 @@ export default function Portfolio() {
           </div>
           <button
             type="button"
-            aria-label={menuOpen ? 'Fechar menu' : 'Abrir menu'}
+            aria-label="Abrir menu"
             aria-expanded={menuOpen}
-            onClick={() => setMenuOpen((v) => !v)}
-            className="md:hidden relative z-[60] w-9 h-9 inline-flex flex-col items-center justify-center gap-[5px] -mr-1"
+            onClick={() => setMenuOpen(true)}
+            className="md:hidden relative z-[60] w-9 h-9 inline-flex flex-col items-center justify-center gap-[5px] -mr-1 transition-opacity duration-200"
+            style={{
+              opacity: menuOpen ? 0 : 1,
+              pointerEvents: menuOpen ? 'none' : 'auto',
+            }}
           >
-            <span
-              className="block w-6 h-[2px] bg-[oklch(0.16_0_0)] transition-transform duration-300 ease-[cubic-bezier(.76,0,.24,1)]"
-              style={{ transform: menuOpen ? 'translateY(7px) rotate(45deg)' : 'none' }}
-            />
-            <span
-              className="block w-6 h-[2px] bg-[oklch(0.16_0_0)] transition-opacity duration-200"
-              style={{ opacity: menuOpen ? 0 : 1 }}
-            />
-            <span
-              className="block w-6 h-[2px] bg-[oklch(0.16_0_0)] transition-transform duration-300 ease-[cubic-bezier(.76,0,.24,1)]"
-              style={{ transform: menuOpen ? 'translateY(-7px) rotate(-45deg)' : 'none' }}
-            />
+            <span className="block w-6 h-[2px] bg-[oklch(0.16_0_0)]" />
+            <span className="block w-6 h-[2px] bg-[oklch(0.16_0_0)]" />
+            <span className="block w-6 h-[2px] bg-[oklch(0.16_0_0)]" />
           </button>
         </div>
       </div>
@@ -724,6 +719,18 @@ export default function Portfolio() {
           transition: 'transform .5s cubic-bezier(.76,0,.24,1)',
         }}
       >
+        <button
+          type="button"
+          onClick={() => setMenuOpen(false)}
+          aria-label="Fechar menu"
+          className="absolute top-4 right-6 w-10 h-10 inline-flex items-center justify-center rounded-full bg-[oklch(0.16_0_0/0.06)] active:bg-[oklch(0.16_0_0/0.14)] text-[oklch(0.16_0_0)] text-2xl leading-none transition-colors duration-200"
+          style={{
+            top: 'max(1rem, env(safe-area-inset-top))',
+            opacity: menuOpen ? 1 : 0,
+            transition: 'opacity .3s ease, background-color .2s ease',
+            transitionDelay: menuOpen ? '0.2s' : '0s',
+          }}
+        >✕</button>
         {['sobre', 'videos', 'projetos'].map((id, i) => (
           <a
             key={id}
