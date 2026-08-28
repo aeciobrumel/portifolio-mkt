@@ -11,9 +11,9 @@ function useIsTouch(): boolean {
 
 /**
  * Trava a experiência em retrato NO CELULAR. `screen.orientation.lock` só
- * funciona em alguns Androids (e nem sempre), então o que realmente segura em
- * todo aparelho — iPhone incluído — é um overlay que cobre a tela enquanto
- * estiver em paisagem. No desktop nunca ativa.
+ * funciona em parte dos Androids, então o que realmente segura em todo
+ * aparelho — iPhone incluído — é o overlay que o retorno deste hook dispara.
+ * No desktop nunca ativa.
  */
 function useLockPortrait(active: boolean): boolean {
   const [isLandscape, setIsLandscape] = useState(false);
@@ -24,7 +24,6 @@ function useLockPortrait(active: boolean): boolean {
     update();
     mq.addEventListener('change', update);
     window.addEventListener('resize', update);
-    // Tentativa best-effort: funciona em parte dos Androids/PWA, no-op no resto.
     const so = screen.orientation as (ScreenOrientation & { lock?: (o: string) => Promise<void> }) | undefined;
     so?.lock?.('portrait').catch(() => {});
     return () => {
@@ -68,10 +67,16 @@ function useMagnetic(ref: React.RefObject<HTMLElement>, strength: number) {
  * (rendered by the caller) so wraparound can jump the scroll position
  * without any visible discontinuity.
  */
-function useCoverflow(ref: React.RefObject<HTMLDivElement>, realCount: number, cloneCount: number, enabled = true) {
+function useCoverflow(ref: React.RefObject<HTMLDivElement>, realCount: number, cloneCount: number) {
   const rafId = useRef<number | null>(null);
   const settleRafId = useRef<number | null>(null);
   const correcting = useRef(false);
+  // True while a finger is on the track. During a touch drag AND the momentum
+  // fling that follows it, the OS owns scrollLeft — if snapToNearest/teleport
+  // write to it in that window they fight the platform scroller and the whole
+  // track visibly shudders. So while touching (and until the fling fully
+  // settles) we only run the visual `update()`, never a scroll correction.
+  const touchActive = useRef(false);
 
   // Cards live inside a Reveal wrapper, so offsetLeft (relative to that
   // wrapper) is always 0, and getBoundingClientRect() is skewed by the
@@ -132,7 +137,7 @@ function useCoverflow(ref: React.RefObject<HTMLDivElement>, realCount: number, c
   // once motion has actually stopped (see watchSettle below).
   const snapToNearest = useCallback(() => {
     const el = ref.current;
-    if (!el || correcting.current) return;
+    if (!el || correcting.current || touchActive.current) return;
     const positions = cardPositions(el);
     if (!positions.length) return;
     const center = el.scrollLeft + el.clientWidth / 2;
@@ -143,14 +148,17 @@ function useCoverflow(ref: React.RefObject<HTMLDivElement>, realCount: number, c
       if (d < bestDist) { bestDist = d; nearest = p; }
     }
     const target = nearest.left + nearest.width / 2 - el.clientWidth / 2;
-    if (Math.abs(target - el.scrollLeft) > 1) {
+    // Ignore sub-4px corrections: on touch the momentum scroller lands a pixel
+    // or two off centre and a "smooth" scrollTo over that tiny gap reads as a
+    // twitch rather than a settle.
+    if (Math.abs(target - el.scrollLeft) > 4) {
       el.scrollTo({ left: target, behavior: 'smooth' });
     }
   }, [ref, cardPositions]);
 
   const loopCheck = useCallback(() => {
     const el = ref.current;
-    if (!el || correcting.current) return;
+    if (!el || correcting.current || touchActive.current) return;
     const positions = cardPositions(el);
     if (positions.length < 2) return;
     const s = positions[1].left - positions[0].left;
@@ -170,12 +178,18 @@ function useCoverflow(ref: React.RefObject<HTMLDivElement>, realCount: number, c
   const watchSettle = useCallback(() => {
     const el = ref.current;
     if (!el) return;
+    // A finger is still down (or the fling is still being tracked as a touch):
+    // let the OS finish. touchend re-arms this watch for the post-fling settle.
+    if (touchActive.current) return;
     const last = el.scrollLeft;
     if (settleRafId.current !== null) cancelAnimationFrame(settleRafId.current);
     settleRafId.current = requestAnimationFrame(() => {
       settleRafId.current = null;
       if (!ref.current) return;
-      if (ref.current.scrollLeft === last) {
+      // Near-equality rather than exact: momentum decays through fractional
+      // pixels, and an exact test can either fire mid-fling on a stale repeat
+      // or never fire at all.
+      if (Math.abs(ref.current.scrollLeft - last) < 0.5) {
         loopCheck();
         snapToNearest();
       } else {
@@ -216,11 +230,42 @@ function useCoverflow(ref: React.RefObject<HTMLDivElement>, realCount: number, c
 
   useEffect(() => {
     const el = ref.current;
-    if (!el || !enabled) return;
+    if (!el) return;
     layout();
     el.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', layout, { passive: true });
     window.addEventListener('load', layout);
+
+    // While a finger is down we keep the visual update running (so the
+    // coverflow curve still tracks the drag) but hold off every scroll
+    // correction. On touchend we wait for the momentum fling to fully stop,
+    // then run one loopCheck + snap — invisible because the scroll is at rest.
+    let settleWatch: number | null = null;
+    const onTouchStart = () => {
+      touchActive.current = true;
+      if (settleWatch !== null) { window.clearTimeout(settleWatch); settleWatch = null; }
+    };
+    const onTouchEnd = () => {
+      let last = el.scrollLeft;
+      const check = () => {
+        if (!ref.current) return;
+        const now = ref.current.scrollLeft;
+        if (Math.abs(now - last) < 0.5) {
+          // Fling has stopped — safe to correct now.
+          touchActive.current = false;
+          settleWatch = null;
+          loopCheck();
+          snapToNearest();
+        } else {
+          last = now;
+          settleWatch = window.setTimeout(check, 90);
+        }
+      };
+      settleWatch = window.setTimeout(check, 90);
+    };
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchend', onTouchEnd, { passive: true });
+    el.addEventListener('touchcancel', onTouchEnd, { passive: true });
     // Cards can change size after mount — fonts finishing load, images
     // decoding, viewport width landing at a size where `min(42vw,214px)`
     // resolves differently — any of which would otherwise leave the
@@ -232,14 +277,18 @@ function useCoverflow(ref: React.RefObject<HTMLDivElement>, realCount: number, c
     if (firstCard) ro.observe(firstCard);
     return () => {
       el.removeEventListener('scroll', onScroll);
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchend', onTouchEnd);
+      el.removeEventListener('touchcancel', onTouchEnd);
       window.removeEventListener('resize', layout);
       window.removeEventListener('load', layout);
       ro.disconnect();
+      if (settleWatch !== null) window.clearTimeout(settleWatch);
       if (rafId.current !== null) cancelAnimationFrame(rafId.current);
       if (settleRafId.current !== null) cancelAnimationFrame(settleRafId.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onScroll, layout, realCount, cloneCount, enabled]);
+  }, [onScroll, layout, realCount, cloneCount, loopCheck, snapToNearest]);
 
   // Lets callers (e.g. clicking a side card) smooth-scroll a specific card
   // to center without fighting snapToNearest — which otherwise reacts to
@@ -249,12 +298,6 @@ function useCoverflow(ref: React.RefObject<HTMLDivElement>, realCount: number, c
   const scrollToCard = useCallback((card: HTMLElement) => {
     const el = ref.current;
     if (!el) return;
-    // On touch, the track is a native scroll-snap scroller with no coverflow
-    // bookkeeping — just nudge it and let CSS snap settle it.
-    if (!enabled) {
-      card.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-      return;
-    }
     const positions = cardPositions(el);
     const entry = positions.find((p) => p.card === card);
     if (!entry) return;
@@ -273,102 +316,9 @@ function useCoverflow(ref: React.RefObject<HTMLDivElement>, realCount: number, c
       el.addEventListener('scrollend', release, { once: true });
     }
     setTimeout(release, 600);
-  }, [ref, cardPositions, enabled]);
+  }, [ref, cardPositions]);
 
   return { scrollToCard };
-}
-
-/**
- * Infinite-loop wraparound for the mobile carousel, which is a plain native
- * scroll-snap track (no coverflow bookkeeping). The track renders `cloneCount`
- * real cards cloned at each end; when the scroll has FULLY stopped on a clone,
- * we jump `scrollLeft` by exactly `realCount` card-steps to the identical real
- * card. The jump is instant and only ever happens at rest, so it never fights
- * the OS momentum scroller — that fight was the source of the jank/white-screen.
- */
-function useCarouselLoop(
-  ref: React.RefObject<HTMLDivElement>,
-  realCount: number,
-  cloneCount: number,
-  active: boolean,
-) {
-  const settleTimer = useRef<number | null>(null);
-  const lastLeft = useRef(-1);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || !active) return;
-
-    // Each `.coverflow-card` sits inside a Reveal wrapper, so its own offsetLeft
-    // is 0 — the wrapper is the actual flex child, so measure that.
-    const wrappers = () =>
-      Array.from(el.querySelectorAll<HTMLElement>('.coverflow-card'))
-        .map((c) => c.parentElement)
-        .filter((w): w is HTMLElement => !!w);
-
-    const step = () => {
-      const w = wrappers();
-      if (w.length < 2) return w[0]?.offsetWidth ?? 0;
-      // Distance between two consecutive card slots (width + flex gap).
-      return (w[1].offsetLeft - w[0].offsetLeft) || w[0].offsetWidth;
-    };
-
-    // Start centred on the first REAL card (index === cloneCount).
-    const recentre = () => {
-      const w = wrappers();
-      const target = w[cloneCount];
-      if (target) target.scrollIntoView({ behavior: 'auto', inline: 'center', block: 'nearest' });
-    };
-
-    const wrapIfNeeded = () => {
-      const s = step();
-      const w = wrappers();
-      if (!s || !w.length) return;
-      const base = w[0].offsetLeft;
-      // Which slot is currently centred in the viewport.
-      const centre = el.scrollLeft + el.clientWidth / 2;
-      const index = Math.round((centre - base - w[0].offsetWidth / 2) / s);
-      let jump = 0;
-      if (index < cloneCount) jump = realCount * s;
-      else if (index >= cloneCount + realCount) jump = -realCount * s;
-      if (!jump) return;
-      // Instant, no smooth — the clone and its real twin are pixel-identical,
-      // and the scroll is already at rest, so this is invisible. Snap is
-      // toggled off for the write so it can't re-animate the correction.
-      const prevSnap = el.style.scrollSnapType;
-      el.style.scrollSnapType = 'none';
-      el.scrollLeft += jump;
-      void el.offsetHeight;
-      el.style.scrollSnapType = prevSnap;
-    };
-
-    const onScroll = () => {
-      if (settleTimer.current !== null) window.clearTimeout(settleTimer.current);
-      // Poll until scrollLeft holds steady for one interval — "fully stopped",
-      // momentum included. scrollend would be cleaner but isn't reliable on iOS.
-      const tick = () => {
-        if (!ref.current) return;
-        if (ref.current.scrollLeft === lastLeft.current) {
-          settleTimer.current = null;
-          wrapIfNeeded();
-        } else {
-          lastLeft.current = ref.current.scrollLeft;
-          settleTimer.current = window.setTimeout(tick, 120);
-        }
-      };
-      lastLeft.current = el.scrollLeft;
-      settleTimer.current = window.setTimeout(tick, 120);
-    };
-
-    // Cards may still be resizing at mount (fonts, `min(42vw,214px)`).
-    const raf = requestAnimationFrame(recentre);
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => {
-      cancelAnimationFrame(raf);
-      el.removeEventListener('scroll', onScroll);
-      if (settleTimer.current !== null) window.clearTimeout(settleTimer.current);
-    };
-  }, [ref, realCount, cloneCount, active]);
 }
 
 /** Drag-to-scroll: lets the mouse "grab and pull" the track like a touch swipe. */
@@ -501,13 +451,7 @@ export default function Portfolio() {
     if (v.src) { videoSrcs[i] = v.src; mediaKinds[i] = v.kind ?? 'video'; }
   });
   const n = VIDEOS_INFO.length;
-  // Desktop runs the coverflow effect (per-frame rescale/rotate). On touch that
-  // machinery fights the OS momentum scroller and caused jank/white-screen, so
-  // mobile uses a plain native scroll-snap track instead. Both modes render the
-  // real set cloned at each end for the infinite loop — on mobile the wraparound
-  // jump is done by useCarouselLoop only once the scroll has fully stopped.
-  const coverflowEnabled = !isTouch;
-  const carouselVideos = [
+  const loopedVideos = [
     ...VIDEOS_INFO.slice(n - CAROUSEL_CLONE_COUNT).map((v, i) => ({ ...v, realIndex: n - CAROUSEL_CLONE_COUNT + i })),
     ...VIDEOS_INFO.map((v, i) => ({ ...v, realIndex: i })),
     ...VIDEOS_INFO.slice(0, CAROUSEL_CLONE_COUNT).map((v, i) => ({ ...v, realIndex: i })),
@@ -528,10 +472,7 @@ export default function Portfolio() {
   const sectionRefs = useRef<Record<string, SectionEntry>>({});
   const activeVideo = useRef<HTMLVideoElement | null>(null);
 
-  const { scrollToCard } = useCoverflow(carousel, VIDEOS_INFO.length, CAROUSEL_CLONE_COUNT, coverflowEnabled);
-  // No mobile o coverflow fica desligado; este hook cuida do loop infinito
-  // fazendo o "pulo" de reposição só quando o scroll para por completo.
-  useCarouselLoop(carousel, VIDEOS_INFO.length, CAROUSEL_CLONE_COUNT, !coverflowEnabled);
+  const { scrollToCard } = useCoverflow(carousel, VIDEOS_INFO.length, CAROUSEL_CLONE_COUNT);
 
   useEffect(() => {
     const lock = menuOpen || projetoAberto !== null;
@@ -917,30 +858,11 @@ export default function Portfolio() {
         <div
           ref={carousel}
           className="flex items-center overflow-x-auto no-scrollbar"
-          style={{
-            perspective: '1200px',
-            touchAction: 'pan-x',
-            paddingTop: '43px',
-            paddingBottom: '43px',
-            gap: 'clamp(11px,3vw,32px)',
-            // Mobile: native momentum scroller with CSS snap. The side padding
-            // centres the first/last card; scrollPaddingInline keeps snap
-            // targets centred too.
-            ...(coverflowEnabled
-              ? null
-              : {
-                  scrollSnapType: 'x mandatory',
-                  scrollPaddingInline: 'calc(50% - min(42vw,214px) / 2)',
-                  paddingInline: 'calc(50% - min(42vw,214px) / 2)',
-                  overscrollBehaviorX: 'contain',
-                  WebkitOverflowScrolling: 'touch',
-                }),
-          }}
+          style={{ perspective: '1200px', touchAction: 'pan-x', paddingTop: '43px', paddingBottom: '43px', gap: 'clamp(11px,3vw,32px)' }}
         >
-          {carouselVideos.map((v, slot) => (
+          {loopedVideos.map((v, slot) => (
             <VideoCard
               key={slot} slot={slot} index={v.realIndex} info={v} src={videoSrcs[v.realIndex]} kind={mediaKinds[v.realIndex]}
-              coverflow={coverflowEnabled}
               cursorEnterLabel={cursorEnterLabel} cursorLeaveLabel={cursorLeaveLabel}
               registerSection={registerSection} onVideoPlay={handleVideoPlay} onCardClick={centerCard}
             />
@@ -1166,11 +1088,9 @@ interface VideoCardProps {
   registerSection: (id: string, el: HTMLElement, setVisible: (v: boolean) => void) => void;
   onVideoPlay: (el: HTMLVideoElement) => void;
   onCardClick: (card: HTMLElement) => void;
-  /** Desktop coverflow mode. When false (touch), the card is a plain CSS snap target. */
-  coverflow: boolean;
 }
 
-function VideoCard({ slot, index, info, src, kind, coverflow, cursorEnterLabel, cursorLeaveLabel, registerSection, onVideoPlay, onCardClick }: VideoCardProps) {
+function VideoCard({ slot, index, info, src, kind, cursorEnterLabel, cursorLeaveLabel, registerSection, onVideoPlay, onCardClick }: VideoCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const tiltRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -1192,17 +1112,13 @@ function VideoCard({ slot, index, info, src, kind, coverflow, cursorEnterLabel, 
         ref={cardRef}
         onClick={() => { if (cardRef.current) onCardClick(cardRef.current); }}
         className="coverflow-card active:scale-[0.97]"
-        style={{
-          width: 'min(42vw,214px)',
-          transition: 'transform 0.4s cubic-bezier(.16,1,.3,1), opacity 0.4s ease',
-          ...(coverflow ? null : { scrollSnapAlign: 'center', scrollSnapStop: 'always' }),
-        }}
+        style={{ width: 'min(42vw,214px)', transition: 'transform 0.4s cubic-bezier(.16,1,.3,1), opacity 0.4s ease' }}
       >
         <div
           ref={tiltRef}
-          onMouseMove={coverflow ? tilt.onMove : undefined}
-          onMouseLeave={coverflow ? () => { tilt.onLeave(); cursorLeaveLabel(); } : undefined}
-          onMouseEnter={coverflow ? cursorEnterLabel('VER') : undefined}
+          onMouseMove={tilt.onMove}
+          onMouseLeave={() => { tilt.onLeave(); cursorLeaveLabel(); }}
+          onMouseEnter={cursorEnterLabel('VER')}
           className="relative w-full rounded-2xl overflow-hidden bg-[oklch(0.9_0.005_90)] transition-transform duration-100"
           style={{ aspectRatio: '9/16', touchAction: 'pan-x' }}
         >
