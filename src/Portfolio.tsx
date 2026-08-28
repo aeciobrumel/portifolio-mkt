@@ -9,6 +9,32 @@ function useIsTouch(): boolean {
   return isTouch;
 }
 
+/**
+ * Trava a experiência em retrato NO CELULAR. `screen.orientation.lock` só
+ * funciona em alguns Androids (e nem sempre), então o que realmente segura em
+ * todo aparelho — iPhone incluído — é um overlay que cobre a tela enquanto
+ * estiver em paisagem. No desktop nunca ativa.
+ */
+function useLockPortrait(active: boolean): boolean {
+  const [isLandscape, setIsLandscape] = useState(false);
+  useEffect(() => {
+    if (!active) return;
+    const mq = window.matchMedia('(orientation: landscape)');
+    const update = () => setIsLandscape(mq.matches && window.innerWidth > window.innerHeight);
+    update();
+    mq.addEventListener('change', update);
+    window.addEventListener('resize', update);
+    // Tentativa best-effort: funciona em parte dos Androids/PWA, no-op no resto.
+    const so = screen.orientation as (ScreenOrientation & { lock?: (o: string) => Promise<void> }) | undefined;
+    so?.lock?.('portrait').catch(() => {});
+    return () => {
+      mq.removeEventListener('change', update);
+      window.removeEventListener('resize', update);
+    };
+  }, [active]);
+  return active && isLandscape;
+}
+
 function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(false);
   useEffect(() => {
@@ -460,6 +486,7 @@ const CAROUSEL_CLONE_COUNT = VIDEOS_INFO.length;
 
 export default function Portfolio() {
   const isTouch = useIsTouch();
+  const forcePortrait = useLockPortrait(isTouch);
   const projetoModalHabilitado = useMediaQuery('(min-width: 378px) and (max-width: 767px)');
   const [heroIn, setHeroIn] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -660,6 +687,16 @@ export default function Portfolio() {
 
   return (
     <div className="w-full overflow-x-hidden text-[oklch(0.16_0_0)]" style={{ cursor: isTouch ? 'auto' : 'none' }}>
+      {/* Trava em retrato no celular: cobre a tela enquanto estiver deitado */}
+      {forcePortrait && (
+        <div className="fixed inset-0 z-[10002] bg-[oklch(0.16_0_0)] text-white flex flex-col items-center justify-center gap-4 px-8 text-center">
+          <div className="text-4xl" style={{ animation: 'rotateHint 2s ease-in-out infinite' }}>📱</div>
+          <div className="font-[Anton] text-lg tracking-wide">Gire o celular</div>
+          <div className="text-[13px] text-[oklch(0.75_0_0)] max-w-[260px] leading-relaxed">
+            Este portfólio foi feito para ser visto em pé. Volte o aparelho para a vertical.
+          </div>
+        </div>
+      )}
       {!isTouch && (
         <>
           <div ref={cursorDot} className="fixed top-0 left-0 w-1.5 h-1.5 -mt-[3px] -ml-[3px] rounded-full bg-[oklch(0.16_0_0)] pointer-events-none z-[9999] will-change-transform" />
