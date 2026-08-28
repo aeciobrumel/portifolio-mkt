@@ -66,6 +66,8 @@ export interface VideoInfo {
   src?: string;
   /** 'video' ou 'image'. Só é necessário se `src` apontar para uma imagem. */
   kind?: 'video' | 'image';
+  /** Imagem de capa do vídeo (opcional). Sem ela, o mobile mostra o 1º frame via preload="metadata". */
+  poster?: string;
 }
 
 export const VIDEOS_INFO: VideoInfo[] = [

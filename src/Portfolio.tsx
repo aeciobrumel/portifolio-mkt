@@ -9,6 +9,18 @@ function useIsTouch(): boolean {
   return isTouch;
 }
 
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const update = () => setMatches(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, [query]);
+  return matches;
+}
+
 function useMagnetic(ref: React.RefObject<HTMLElement>, strength: number) {
   const onMove = useCallback((e: React.MouseEvent) => {
     const el = ref.current;
@@ -349,10 +361,14 @@ const CAROUSEL_CLONE_COUNT = VIDEOS_INFO.length;
 
 export default function Portfolio() {
   const isTouch = useIsTouch();
+  const projetoModalHabilitado = useMediaQuery('(min-width: 378px) and (max-width: 767px)');
   const [heroIn, setHeroIn] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [preloaderRemoved, setPreloaderRemoved] = useState(false);
   const [loadPct, setLoadPct] = useState(0);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const [projetoAberto, setProjetoAberto] = useState<number | null>(null);
   const videoSrcs: Record<number, string> = {};
   const mediaKinds: Record<number, MediaKind> = {};
   VIDEOS_INFO.forEach((v, i) => {
@@ -381,6 +397,31 @@ export default function Portfolio() {
   const activeVideo = useRef<HTMLVideoElement | null>(null);
 
   const { scrollToCard } = useCoverflow(carousel, VIDEOS_INFO.length, CAROUSEL_CLONE_COUNT);
+
+  useEffect(() => {
+    const lock = menuOpen || projetoAberto !== null;
+    document.body.style.overflow = lock ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [menuOpen, projetoAberto]);
+
+  useEffect(() => {
+    if (projetoAberto === null) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setProjetoAberto(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [projetoAberto]);
+
+  useEffect(() => {
+    if (!projetoModalHabilitado) setProjetoAberto(null);
+  }, [projetoModalHabilitado]);
+
+  const closeMenuAndGo = useCallback((e: React.MouseEvent<HTMLAnchorElement>, hash: string) => {
+    e.preventDefault();
+    setMenuOpen(false);
+    setTimeout(() => {
+      document.querySelector(hash)?.scrollIntoView({ behavior: 'smooth' });
+    }, 400);
+  }, []);
 
   const centerCard = useCallback((card: HTMLElement) => {
     scrollToCard(card);
@@ -436,6 +477,7 @@ export default function Portfolio() {
         backToTop.current.style.opacity = show ? '1' : '0';
         backToTop.current.style.pointerEvents = show ? 'auto' : 'none';
       }
+      setScrolled(window.scrollY > 20);
       checkReveals();
     };
     window.addEventListener('scroll', onScroll, { passive: true });
@@ -544,18 +586,85 @@ export default function Portfolio() {
       >↑</div>
 
       {/* NAV */}
-      <div className="sticky top-0 z-50 flex flex-wrap items-center justify-between gap-3 px-3 md:px-8 py-3.5 bg-[oklch(0.97_0.008_90/0.85)] backdrop-blur-sm border-b border-[oklch(0.16_0_0/0.08)]">
-        <div className="font-[Anton] text-[15px] tracking-wide">MARIA<span className="text-[oklch(0.52_0.24_292)]">.</span></div>
-        <div className="flex flex-wrap gap-2 md:gap-5 items-center text-[13px] font-semibold">
-          <a href="#sobre" onMouseEnter={cursorEnter} onMouseLeave={cursorLeave} className="text-[oklch(0.16_0_0)] hover:text-[oklch(0.52_0.24_292)]">Sobre</a>
-          <a href="#videos" onMouseEnter={cursorEnter} onMouseLeave={cursorLeave} className="text-[oklch(0.16_0_0)] hover:text-[oklch(0.52_0.24_292)]">Conteúdos</a>
-          <a href="#projetos" onMouseEnter={cursorEnter} onMouseLeave={cursorLeave} className="text-[oklch(0.16_0_0)] hover:text-[oklch(0.52_0.24_292)]">Projetos</a>
-          <a
-            ref={navCta} href="#contato" onMouseMove={navMag.onMove} onMouseLeave={navMag.onLeave}
-            className="bg-[oklch(0.16_0_0)] text-white px-3.5 py-2 min-h-8 box-border inline-flex items-center rounded-full font-bold whitespace-nowrap transition-transform duration-200 active:scale-95 active:bg-[oklch(0.52_0.24_292)]"
-          >Fale comigo</a>
+      <div className="fixed top-0 inset-x-0 z-50 bg-[oklch(0.97_0.008_90)] border-b border-[oklch(0.16_0_0/0.08)]">
+        <div className={`flex items-center justify-between gap-3 px-3 md:px-8 transition-[padding] duration-300 ease-[cubic-bezier(.76,0,.24,1)] ${scrolled ? 'py-1.5' : 'py-3.5'}`}>
+          <div className="font-[Anton] text-[15px] tracking-wide">MARIA<span className="text-[oklch(0.52_0.24_292)]">.</span></div>
+          <div className="hidden md:flex flex-wrap gap-2 md:gap-5 items-center text-[13px] font-semibold">
+            <a href="#sobre" onMouseEnter={cursorEnter} onMouseLeave={cursorLeave} className="text-[oklch(0.16_0_0)] hover:text-[oklch(0.52_0.24_292)]">Sobre</a>
+            <a href="#videos" onMouseEnter={cursorEnter} onMouseLeave={cursorLeave} className="text-[oklch(0.16_0_0)] hover:text-[oklch(0.52_0.24_292)]">Conteúdos</a>
+            <a href="#projetos" onMouseEnter={cursorEnter} onMouseLeave={cursorLeave} className="text-[oklch(0.16_0_0)] hover:text-[oklch(0.52_0.24_292)]">Projetos</a>
+            <a
+              ref={navCta} href="#contato" onMouseMove={navMag.onMove} onMouseLeave={navMag.onLeave}
+              className="bg-[oklch(0.16_0_0)] text-white px-3.5 py-2 min-h-8 box-border inline-flex items-center rounded-full font-bold whitespace-nowrap transition-transform duration-200 active:scale-95 active:bg-[oklch(0.52_0.24_292)]"
+            >Fale comigo</a>
+          </div>
+          <button
+            type="button"
+            aria-label={menuOpen ? 'Fechar menu' : 'Abrir menu'}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((v) => !v)}
+            className="md:hidden relative z-[60] w-9 h-9 inline-flex flex-col items-center justify-center gap-[5px] -mr-1"
+          >
+            <span
+              className="block w-6 h-[2px] bg-[oklch(0.16_0_0)] transition-transform duration-300 ease-[cubic-bezier(.76,0,.24,1)]"
+              style={{ transform: menuOpen ? 'translateY(7px) rotate(45deg)' : 'none' }}
+            />
+            <span
+              className="block w-6 h-[2px] bg-[oklch(0.16_0_0)] transition-opacity duration-200"
+              style={{ opacity: menuOpen ? 0 : 1 }}
+            />
+            <span
+              className="block w-6 h-[2px] bg-[oklch(0.16_0_0)] transition-transform duration-300 ease-[cubic-bezier(.76,0,.24,1)]"
+              style={{ transform: menuOpen ? 'translateY(-7px) rotate(-45deg)' : 'none' }}
+            />
+          </button>
         </div>
       </div>
+
+      {/* BACKDROP */}
+      <div
+        className="md:hidden fixed inset-0 z-[54]"
+        onClick={() => setMenuOpen(false)}
+        style={{
+          pointerEvents: menuOpen ? 'auto' : 'none',
+        }}
+      />
+
+      {/* MENU MOBILE DRAWER (80% da largura, altura total) */}
+      <div
+        className="md:hidden fixed top-0 right-0 h-screen w-[80vw] z-[55] bg-[oklch(0.97_0.008_90)] shadow-[-8px_0_40px_oklch(0.16_0_0/0.15)] flex flex-col items-start justify-center gap-6 pl-10 pr-8"
+        style={{
+          transform: menuOpen ? 'translateX(0)' : 'translateX(100%)',
+          transition: 'transform .5s cubic-bezier(.76,0,.24,1)',
+        }}
+      >
+        {['sobre', 'videos', 'projetos'].map((id, i) => (
+          <a
+            key={id}
+            href={`#${id}`}
+            onClick={(e) => closeMenuAndGo(e, `#${id}`)}
+            className="font-[Anton] text-[clamp(20px,5vw,26px)] leading-tight tracking-wide text-[oklch(0.16_0_0)] hover:text-[oklch(0.52_0.24_292)] transition-[color,transform,opacity] duration-500"
+            style={{
+              transform: menuOpen ? 'translateX(0)' : 'translateX(30px)',
+              opacity: menuOpen ? 1 : 0,
+              transitionDelay: menuOpen ? `${0.15 + i * 0.07}s` : '0s',
+            }}
+          >{id === 'sobre' ? 'Sobre' : id === 'videos' ? 'Conteúdos' : 'Projetos'}</a>
+        ))}
+        <a
+          href="#contato"
+          onClick={(e) => closeMenuAndGo(e, '#contato')}
+          className="mt-4 bg-[oklch(0.16_0_0)] text-white px-7 py-3.5 box-border inline-flex items-center justify-center rounded-full font-bold text-[15px] whitespace-nowrap transition-[transform,opacity,background-color] duration-500 active:scale-95 active:bg-[oklch(0.52_0.24_292)]"
+          style={{
+            transform: menuOpen ? 'translateX(0)' : 'translateX(30px)',
+            opacity: menuOpen ? 1 : 0,
+            transitionDelay: menuOpen ? '0.36s' : '0s',
+          }}
+        >Fale comigo</a>
+      </div>
+
+      {/* espaçador para compensar o header fixo */}
+      <div aria-hidden className="h-[53px]" />
 
       {/* HERO */}
       <div
@@ -685,12 +794,75 @@ export default function Portfolio() {
           <div className="grid mx-auto" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(min(160px,100%),1fr))', gap: 'clamp(20px,4vw,28px)', maxWidth: '760px' }}>
             {PROJETOS.map((p, i) => (
               <Reveal key={p.titulo} id={`projeto-${i}`} delay={i * 0.1} onRegister={registerSection}>
-                <ProjectCarousel imagens={p.imagens} titulo={p.titulo} />
-                <div className="mt-3 font-extrabold text-sm">{p.titulo}</div>
-                <div className="text-[12px] leading-relaxed text-[oklch(0.4_0_0)] mt-0.5">{p.desc}</div>
+                {projetoModalHabilitado ? (
+                  <button
+                    type="button"
+                    onClick={() => setProjetoAberto(i)}
+                    aria-haspopup="dialog"
+                    className="group/card block w-full text-left"
+                  >
+                    <div className="relative">
+                      <ProjectCarousel imagens={p.imagens} titulo={p.titulo} interactive={false} />
+                      <div className="absolute inset-0 rounded-[7px] bg-[oklch(0.16_0_0/0)] active:bg-[oklch(0.16_0_0/0.12)] transition-colors duration-200 flex items-center justify-center">
+                        <span className="bg-[oklch(0.97_0.008_90)] text-[oklch(0.16_0_0)] text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full shadow-sm">Ver projeto</span>
+                      </div>
+                    </div>
+                    <div className="mt-3 font-extrabold text-sm">{p.titulo}</div>
+                    <div className="text-[12px] leading-relaxed text-[oklch(0.4_0_0)] mt-0.5">{p.desc}</div>
+                  </button>
+                ) : (
+                  <>
+                    <ProjectCarousel imagens={p.imagens} titulo={p.titulo} />
+                    <div className="mt-3 font-extrabold text-sm">{p.titulo}</div>
+                    <div className="text-[12px] leading-relaxed text-[oklch(0.4_0_0)] mt-0.5">{p.desc}</div>
+                  </>
+                )}
               </Reveal>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* MODAL PROJETO (só mobile) */}
+      <div
+        className="md:hidden fixed inset-0 z-[70] flex items-center justify-center p-2"
+        role="dialog"
+        aria-modal="true"
+        style={{
+          pointerEvents: projetoAberto !== null ? 'auto' : 'none',
+        }}
+      >
+        <div
+          onClick={() => setProjetoAberto(null)}
+          className="absolute inset-0 bg-[oklch(0_0_0/0.55)]"
+          style={{ opacity: projetoAberto !== null ? 1 : 0, transition: 'opacity .3s ease' }}
+        />
+        <div
+          className="relative w-full h-[96vh] flex flex-col bg-[oklch(0.16_0_0)] text-white rounded-2xl p-4 pt-12"
+          style={{
+            opacity: projetoAberto !== null ? 1 : 0,
+            transform: projetoAberto !== null ? 'translateY(0) scale(1)' : 'translateY(20px) scale(0.97)',
+            transition: 'opacity .3s ease, transform .5s cubic-bezier(.76,0,.24,1)',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setProjetoAberto(null)}
+            aria-label="Fechar"
+            className="absolute top-3 right-3 w-9 h-9 inline-flex items-center justify-center rounded-full bg-[oklch(1_0_0/0.1)] hover:bg-[oklch(1_0_0/0.2)] text-white text-xl leading-none transition-colors duration-200"
+          >✕</button>
+          {projetoAberto !== null && (
+            <>
+              <ProjectCarousel
+                key={projetoAberto}
+                imagens={PROJETOS[projetoAberto].imagens}
+                titulo={PROJETOS[projetoAberto].titulo}
+                variant="modal"
+              />
+              <div className="mt-3 font-[Anton] text-[clamp(18px,5vw,24px)] tracking-wide shrink-0">{PROJETOS[projetoAberto].titulo}</div>
+              <div className="text-[13px] leading-relaxed text-[oklch(0.75_0_0)] mt-1.5 shrink-0">{PROJETOS[projetoAberto].desc}</div>
+            </>
+          )}
         </div>
       </div>
 
@@ -719,9 +891,11 @@ export default function Portfolio() {
 interface ProjectCarouselProps {
   imagens: string[];
   titulo: string;
+  interactive?: boolean;
+  variant?: 'card' | 'modal';
 }
 
-function ProjectCarousel({ imagens, titulo }: ProjectCarouselProps) {
+function ProjectCarousel({ imagens, titulo, interactive = true, variant = 'card' }: ProjectCarouselProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
   const isTouch = useIsTouch();
@@ -741,20 +915,27 @@ function ProjectCarousel({ imagens, titulo }: ProjectCarouselProps) {
     el.scrollTo({ left: clamped * el.clientWidth, behavior: 'smooth' });
   };
 
-  const showArrows = !isTouch && imagens.length > 1;
+  const showArrows = interactive && !isTouch && imagens.length > 1;
+  const isModal = variant === 'modal';
 
   return (
-    <div className="relative group">
+    <div className={`relative group ${isModal ? 'flex-1 min-h-0 flex flex-col' : ''}`}>
       <div
         ref={trackRef}
         onScroll={onScroll}
-        className="flex overflow-x-auto no-scrollbar rounded-[7px] bg-[oklch(0.9_0.005_90)]"
-        style={{ aspectRatio: '4/5', scrollSnapType: 'x mandatory' }}
+        className={`flex overflow-x-auto no-scrollbar ${isModal ? 'flex-1 min-h-0' : 'rounded-[7px] bg-[oklch(0.9_0.005_90)]'} ${interactive ? '' : 'pointer-events-none'}`}
+        style={isModal
+          ? { scrollSnapType: 'x mandatory', touchAction: 'pan-x', WebkitOverflowScrolling: 'touch' }
+          : { aspectRatio: '4/5', scrollSnapType: 'x mandatory', touchAction: 'pan-x', WebkitOverflowScrolling: 'touch' }}
       >
         {imagens.map((src, idx) => (
           <div key={idx} className="flex-none w-full h-full flex items-center justify-center text-[13px] text-[oklch(0.5_0_0)]" style={{ scrollSnapAlign: 'start' }}>
             {src ? (
-              <img src={src} alt={`${titulo} — imagem ${idx + 1}`} className="w-full h-full object-cover block" />
+              <img
+                src={src}
+                alt={`${titulo} — imagem ${idx + 1}`}
+                className={`block ${isModal ? 'max-w-full max-h-full object-contain' : 'w-full h-full object-cover'}`}
+              />
             ) : (
               `Imagem do projeto ${idx + 1}`
             )}
@@ -780,18 +961,21 @@ function ProjectCarousel({ imagens, titulo }: ProjectCarouselProps) {
         </>
       )}
       {imagens.length > 1 && (
-        <div className="flex justify-center gap-1.5 mt-2.5 mb-1.5">
+        <div className={`flex justify-center gap-1.5 mb-1.5 ${isModal ? 'mt-3' : 'mt-2.5'}`}>
           {imagens.map((_, idx) => (
             <button
               key={idx}
               type="button"
+              tabIndex={interactive ? 0 : -1}
               aria-label={`Ir para imagem ${idx + 1}`}
-              onClick={() => goTo(idx)}
-              className="rounded-full transition-[background,transform] duration-200"
+              onClick={(e) => { if (!interactive) return; e.stopPropagation(); goTo(idx); }}
+              className={`rounded-full transition-[background,transform] duration-200 ${interactive ? '' : 'pointer-events-none'}`}
               style={{
                 width: idx === active ? '12px' : '5px',
                 height: '5px',
-                background: idx === active ? 'oklch(0.52 0.24 292)' : 'oklch(0.16 0 0 / 0.25)',
+                background: idx === active
+                  ? 'oklch(0.52 0.24 292)'
+                  : isModal ? 'oklch(1 0 0 / 0.3)' : 'oklch(0.16 0 0 / 0.25)',
               }}
             />
           ))}
@@ -804,6 +988,7 @@ function ProjectCarousel({ imagens, titulo }: ProjectCarouselProps) {
 interface VideoInfo {
   titulo: string;
   tipo: string;
+  poster?: string;
 }
 
 interface VideoCardProps {
@@ -849,23 +1034,37 @@ function VideoCard({ slot, index, info, src, kind, cursorEnterLabel, cursorLeave
           onMouseLeave={() => { tilt.onLeave(); cursorLeaveLabel(); }}
           onMouseEnter={cursorEnterLabel('VER')}
           className="relative w-full rounded-2xl overflow-hidden bg-[oklch(0.9_0.005_90)] transition-transform duration-100"
-          style={{ aspectRatio: '9/16' }}
+          style={{ aspectRatio: '9/16', touchAction: 'pan-x' }}
         >
           {hasVideo && (
             <>
               <video
-                ref={videoRef} src={src} controls playsInline preload="auto"
+                ref={videoRef} src={src} poster={info.poster} playsInline preload="metadata"
+                controls={isPlaying}
                 onPlay={() => { setIsPlaying(true); if (videoRef.current) onVideoPlay(videoRef.current); }}
                 onPause={() => setIsPlaying(false)}
                 className="w-full h-full object-cover block bg-black"
+                style={{ touchAction: 'pan-x' }}
               />
               {!isPlaying && (
-                <div
-                  onClick={togglePlay}
-                  className="absolute top-1/2 left-1/2 w-10 h-10 rounded-full bg-white/90 flex items-center justify-center cursor-pointer -translate-x-1/2 -translate-y-1/2 pointer-events-auto"
-                >
-                  <div className="w-0 h-0 border-t-[7px] border-t-transparent border-b-[7px] border-b-transparent border-l-[12px] border-l-[oklch(0.16_0_0)] ml-0.5" />
-                </div>
+                <>
+                  {/* Enquanto o vídeo não está tocando, esta camada fica sobre ele
+                      (abaixo do botão de play) para que um swipe horizontal role o
+                      carrossel em vez de virar scrub no <video>, e para que os
+                      cards laterais não exponham os controles nativos. Um toque
+                      aqui só centraliza o card. */}
+                  <div
+                    onClick={() => { if (cardRef.current) onCardClick(cardRef.current); }}
+                    className="absolute inset-0 z-[1]"
+                    style={{ touchAction: 'pan-x' }}
+                  />
+                  <div
+                    onClick={togglePlay}
+                    className="absolute top-1/2 left-1/2 w-10 h-10 rounded-full bg-white/90 flex items-center justify-center cursor-pointer -translate-x-1/2 -translate-y-1/2 pointer-events-auto z-[2]"
+                  >
+                    <div className="w-0 h-0 border-t-[7px] border-t-transparent border-b-[7px] border-b-transparent border-l-[12px] border-l-[oklch(0.16_0_0)] ml-0.5" />
+                  </div>
+                </>
               )}
             </>
           )}
