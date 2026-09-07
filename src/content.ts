@@ -2,6 +2,7 @@ import video1 from './img/VIDEO1.mp4';
 import video2 from './img/VIDEO2.mp4';
 import video3 from './img/VIDEO3.mp4';
 import video4 from './img/VIDEO4.mp4';
+import video5 from './img/VIDEO5.mp4';
 import produto1 from './img/PRODUTO1.webp';
 import produto2 from './img/PRODUTO2.webp';
 import produto3 from './img/PRODUTO3.webp';
@@ -75,6 +76,7 @@ export const VIDEOS_INFO: VideoInfo[] = [
   { titulo: 'Apresentação de Serviço', tipo: 'Terapeuta Integrativa', src: video2 },
   { titulo: 'Apresentação de Produto Digital', tipo: 'Aplicativo', src: video3 },
   { titulo: 'Formação Acadêmica', tipo: 'Institucional', src: video4 },
+  { titulo: 'Vídeo 5', tipo: 'Conteúdo', src: video5 },
 ];
 
 export const TAGS: string[] = ['Instagram', 'Reels & TikTok', 'Copywriting', 'Tráfego Pago', 'Branding'];
